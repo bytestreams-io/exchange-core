@@ -21,6 +21,7 @@ import io.opentelemetry.api.trace.Tracer;
 public final class OTel {
   public static final AttributeKey<String> CHANNEL_ID = AttributeKey.stringKey("channel_id");
   public static final AttributeKey<String> CHANNEL_TYPE = AttributeKey.stringKey("channel_type");
+  public static final AttributeKey<String> DIRECTION = AttributeKey.stringKey("direction");
   public static final AttributeKey<String> ERROR_TYPE = AttributeKey.stringKey("error_type");
   public static final AttributeKey<String> MESSAGE_ID = AttributeKey.stringKey("message_id");
   public static final AttributeKey<String> MESSAGE_TYPE = AttributeKey.stringKey("message_type");
@@ -68,5 +69,22 @@ public final class OTel {
         .putAll(attrs)
         .put(ERROR_TYPE, error.getClass().getSimpleName())
         .build();
+  }
+
+  /** Identifies the traffic direction for a channel, used as an OTel metric attribute. */
+  public enum Direction {
+    OUTBOUND("outbound"),
+    INBOUND("inbound");
+
+    private final String value;
+
+    Direction(String value) {
+      this.value = value;
+    }
+
+    /** Returns the string value used in OTel attributes. */
+    public String value() {
+      return value;
+    }
   }
 }

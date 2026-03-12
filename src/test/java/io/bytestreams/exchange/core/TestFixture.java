@@ -15,6 +15,7 @@ class TestFixture {
   static final MessageReader<String> FRAMED_READER = TestFixture::readFramed;
   static final MessageWriter<String> FRAMED_WRITER = TestFixture::writeFramed;
   static final AttributeKey<String> CHANNEL_TYPE = OTel.CHANNEL_TYPE;
+  static final AttributeKey<String> DIRECTION = OTel.DIRECTION;
   static final AttributeKey<String> MESSAGE_TYPE = OTel.MESSAGE_TYPE;
   static final AttributeKey<String> ERROR_TYPE = OTel.ERROR_TYPE;
 
