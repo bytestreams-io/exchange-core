@@ -8,6 +8,7 @@ import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 class TestFixture {
@@ -21,8 +22,7 @@ class TestFixture {
 
   static void writeFramed(String msg, OutputStream out) throws IOException {
     byte[] data = msg.getBytes(StandardCharsets.UTF_8);
-    int len = data.length;
-    out.write(new byte[] {(byte) (len >> 24), (byte) (len >> 16), (byte) (len >> 8), (byte) len});
+    out.write(ByteBuffer.allocate(4).putInt(data.length).array());
     out.write(data);
     out.flush();
   }
@@ -32,11 +32,7 @@ class TestFixture {
     if (lenBuf.length < 4) {
       throw new IOException("Unexpected end of stream");
     }
-    int len =
-        ((lenBuf[0] & 0xFF) << 24)
-            | ((lenBuf[1] & 0xFF) << 16)
-            | ((lenBuf[2] & 0xFF) << 8)
-            | (lenBuf[3] & 0xFF);
+    int len = ByteBuffer.wrap(lenBuf).getInt();
     byte[] data = in.readNBytes(len);
     if (data.length < len) {
       throw new IOException("Unexpected end of stream");
