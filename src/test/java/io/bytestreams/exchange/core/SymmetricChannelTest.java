@@ -73,102 +73,95 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
   class BuilderTests {
     @Test
     void builder_missing_transport_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("transport");
     }
 
     @Test
     void builder_missing_writer_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("writer");
     }
 
     @Test
     void builder_missing_reader_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("reader");
     }
 
     @Test
     void builder_missing_idExtractor_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("idExtractor");
     }
 
     @Test
     void builder_missing_requestHandler_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("requestHandler");
     }
 
     @Test
     void builder_zero_writeBufferSize_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .writeBufferSize(0)
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {})
+              .writeBufferSize(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("writeBufferSize");
     }
 
     @Test
     void builder_zero_maxConcurrency_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .maxConcurrency(0)
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {})
+              .maxConcurrency(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("maxConcurrency");
     }
@@ -196,78 +189,73 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
 
     @Test
     void builder_default_timeout_zero_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .defaultTimeout(Duration.ZERO)
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {})
+              .defaultTimeout(Duration.ZERO);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_default_timeout_negative_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .defaultTimeout(Duration.ofSeconds(-1))
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {})
+              .defaultTimeout(Duration.ofSeconds(-1));
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_default_timeout_null_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .defaultTimeout(null)
-                      .build())
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {})
+              .defaultTimeout(null);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_null_meter_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .meter(null))
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(() -> builder.meter(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("meter");
     }
 
     @Test
     void builder_null_tracer_throws() {
-      assertThatThrownBy(
-              () ->
-                  SymmetricChannel.<String>symmetricBuilder()
-                      .transport(transport)
-                      .writer(TestFixture.FRAMED_WRITER)
-                      .reader(TestFixture.FRAMED_READER)
-                      .idExtractor(ID_EXTRACTOR)
-                      .requestHandler((req, future) -> {})
-                      .tracer(null))
+      var builder =
+          SymmetricChannel.<String>symmetricBuilder()
+              .transport(transport)
+              .writer(TestFixture.FRAMED_WRITER)
+              .reader(TestFixture.FRAMED_READER)
+              .idExtractor(ID_EXTRACTOR)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(() -> builder.tracer(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("tracer");
     }
@@ -458,7 +446,7 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
   @Nested
   class CloseLifecycle {
     @Test
-    void close_transitions_to_closed_status() throws Exception {
+    void close_transitions_to_closed_status() {
       var ch = createChannel();
       channel = ch;
       CompletableFuture<Void> closeFuture = ch.close();
@@ -509,7 +497,7 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void channel_type_is_symmetric_in_outbound_metrics() throws Exception {
+    void channel_type_is_symmetric_in_outbound_metrics() {
       var ch = createMetricChannel();
       channel = ch;
       ch.request("reqA");
@@ -522,7 +510,7 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void outbound_request_has_direction_outbound() throws Exception {
+    void outbound_request_has_direction_outbound() {
       var ch = createMetricChannel();
       channel = ch;
       ch.request("reqA");

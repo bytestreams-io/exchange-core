@@ -81,164 +81,153 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
   class BuilderTests {
     @Test
     void builder_missing_transport_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("transport");
     }
 
     @Test
     void builder_missing_requestWriter_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("requestWriter");
     }
 
     @Test
     void builder_missing_responseReader_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("responseReader");
     }
 
     @Test
     void builder_missing_requestIdExtractor_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .responseIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("requestIdExtractor");
     }
 
     @Test
     void builder_missing_responseIdExtractor_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("responseIdExtractor");
     }
 
     @Test
     void builder_zero_writeBufferSize_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .writeBufferSize(0)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR)
+              .writeBufferSize(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("writeBufferSize");
     }
 
     @Test
     void builder_zero_maxConcurrency_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .maxConcurrency(0)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR)
+              .maxConcurrency(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("maxConcurrency");
     }
 
     @Test
     void builder_null_defaultTimeout_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .defaultTimeout(null)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR)
+              .defaultTimeout(null);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_zero_defaultTimeout_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .defaultTimeout(Duration.ZERO)
-                      .build())
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR)
+              .defaultTimeout(Duration.ZERO);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_null_meter_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .meter(null))
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(() -> builder.meter(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("meter");
     }
 
     @Test
     void builder_null_tracer_throws() {
-      assertThatThrownBy(
-              () ->
-                  MultiplexedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .requestIdExtractor(ID_EXTRACTOR)
-                      .responseIdExtractor(ID_EXTRACTOR)
-                      .tracer(null))
+      var builder =
+          MultiplexedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .requestIdExtractor(ID_EXTRACTOR)
+              .responseIdExtractor(ID_EXTRACTOR);
+      assertThatThrownBy(() -> builder.tracer(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("tracer");
     }
@@ -394,7 +383,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void duplicate_id_throws_duplicate_correlation_id_exception() throws Exception {
+    void duplicate_id_throws_duplicate_correlation_id_exception() {
       var ch = createChannel();
       channel = ch;
       ch.request("sameId");
@@ -457,7 +446,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
   @Nested
   class TimeoutTests {
     @Test
-    void timeout_affects_only_timed_out_request() throws Exception {
+    void timeout_affects_only_timed_out_request() {
       var ch = createChannel();
       channel = ch;
       CompletableFuture<String> futureA = ch.request("reqA", Duration.ofMillis(50));
@@ -479,7 +468,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
   @Nested
   class BackpressureTests {
     @Test
-    void backpressure_at_max_concurrency() throws Exception {
+    void backpressure_at_max_concurrency() {
       var ch = createChannel(1);
       channel = ch;
       // First request fills the semaphore
@@ -497,7 +486,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
   @Nested
   class CloseLifecycle {
     @Test
-    void close_transitions_to_closed_status() throws Exception {
+    void close_transitions_to_closed_status() {
       channel = createChannel();
       CompletableFuture<Void> closeFuture = channel.close();
       assertThat(closeFuture).succeedsWithin(Duration.ofMillis(500));
@@ -562,7 +551,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void request_active_incremented_on_send() throws Exception {
+    void request_active_incremented_on_send() {
       var ch = createMetricChannel();
       channel = ch;
       ch.request("reqA");
@@ -613,7 +602,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void request_errors_incremented_on_failure() throws Exception {
+    void request_errors_incremented_on_failure() {
       var ch = createMetricChannel();
       channel = ch;
       CompletableFuture<String> future = ch.request("reqA", Duration.ofMillis(50));

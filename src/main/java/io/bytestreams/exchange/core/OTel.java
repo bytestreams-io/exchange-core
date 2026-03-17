@@ -28,9 +28,18 @@ public final class OTel {
   public static final AttributeKey<String> SERVER_ADDRESS =
       AttributeKey.stringKey("server.address");
   public static final AttributeKey<Long> SERVER_PORT = AttributeKey.longKey("server.port");
-
+  public static final AttributeKey<String> NETWORK_TRANSPORT =
+      AttributeKey.stringKey("network.transport");
+  public static final AttributeKey<String> NETWORK_TYPE = AttributeKey.stringKey("network.type");
+  public static final AttributeKey<String> NETWORK_PEER_ADDRESS =
+      AttributeKey.stringKey("network.peer.address");
+  public static final AttributeKey<Long> NETWORK_PEER_PORT =
+      AttributeKey.longKey("network.peer.port");
   public static final double NANOS_PER_MS = 1_000_000.0;
   public static final String NAMESPACE = "io.bytestreams";
+  public static final String UNIT_REQUEST = "{request}";
+
+  private OTel() {}
 
   /** Returns the default {@link Meter}, resolved lazily from {@link GlobalOpenTelemetry}. */
   public static Meter meter() {
@@ -41,16 +50,6 @@ public final class OTel {
   public static Tracer tracer() {
     return GlobalOpenTelemetry.get().getTracer(NAMESPACE);
   }
-
-  public static final AttributeKey<String> NETWORK_TRANSPORT =
-      AttributeKey.stringKey("network.transport");
-  public static final AttributeKey<String> NETWORK_TYPE = AttributeKey.stringKey("network.type");
-  public static final AttributeKey<String> NETWORK_PEER_ADDRESS =
-      AttributeKey.stringKey("network.peer.address");
-  public static final AttributeKey<Long> NETWORK_PEER_PORT =
-      AttributeKey.longKey("network.peer.port");
-
-  private OTel() {}
 
   public static void endSpan(Span span, Throwable error) {
     if (error != null) {

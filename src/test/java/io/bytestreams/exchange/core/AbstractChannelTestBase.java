@@ -113,7 +113,7 @@ abstract class AbstractChannelTestBase {
     verify(errorHandler, timeout(1000).atLeastOnce()).stopOnError(any(), any());
   }
 
-  // -- Read loop outer catch(Throwable) safety net --
+  // -- Read loop safety net --
 
   @Test
   void read_loop_outer_catch_throwable_closes_transport() throws Exception {
@@ -167,7 +167,7 @@ abstract class AbstractChannelTestBase {
   // -- Close lifecycle (tests AbstractChannel.close/closeFuture) --
 
   @Test
-  void close_is_idempotent() throws Exception {
+  void close_is_idempotent() {
     channel = createChannel();
     CompletableFuture<Void> first = channel.close();
     assertThat(first).succeedsWithin(Duration.ofMillis(500));
@@ -175,7 +175,7 @@ abstract class AbstractChannelTestBase {
   }
 
   @Test
-  void closeFuture_is_read_only() throws Exception {
+  void closeFuture_is_read_only() {
     channel = createChannel();
     CompletableFuture<Void> closeFuture = channel.closeFuture();
     closeFuture.complete(null);
