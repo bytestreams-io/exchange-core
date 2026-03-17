@@ -1,0 +1,29 @@
+name: Javadoc
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  javadoc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - run: mvn javadoc:javadoc -q
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: target/reports/apidocs
+
+      - uses: actions/deploy-pages@v4
