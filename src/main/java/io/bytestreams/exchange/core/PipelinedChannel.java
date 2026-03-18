@@ -1,16 +1,12 @@
 package io.bytestreams.exchange.core;
 
-import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.Meter;
-import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,52 +58,8 @@ public class PipelinedChannel<REQ, RESP> extends AbstractClientChannel<REQ, RESP
   }
 
   @Override
-  public CompletableFuture<RESP> request(REQ request, Duration timeout) {
-    if (timeout == null || !timeout.isPositive()) {
-      throw new IllegalArgumentException("timeout must be positive");
-    }
-    if (status() == ChannelStatus.INIT) {
-      throw new IllegalStateException("Channel not started");
-    }
-    Span requestSpan =
-        tracer
-            .spanBuilder("request")
-            .addLink(channelSpan.getSpanContext())
-            .setAttribute(OTel.MESSAGE_TYPE, request.getClass().getSimpleName())
-            .startSpan();
-    if (SHUTTING_DOWN.contains(status())) {
-      CancellationException channelClosed = new CancellationException("Channel closed");
-      OTel.endSpan(requestSpan, channelClosed);
-      return CompletableFuture.failedFuture(channelClosed);
-    }
-    try {
-      synchronized (writeLock) {
-        CompletableFuture<RESP> future = correlator.register();
-        Attributes attrs = requestAttributes(request);
-        long startNanos = System.nanoTime();
-        requestActive.add(1, attrs);
-        future.whenComplete(
-            (resp, e) -> {
-              double durationMs = (System.nanoTime() - startNanos) / OTel.NANOS_PER_MS;
-              requestTotal.add(1, OTel.withError(attrs, e));
-              requestActive.add(-1, attrs);
-              requestDuration.record(durationMs, OTel.withError(attrs, e));
-              if (e != null) {
-                requestErrors.add(1, OTel.withError(attrs, e));
-              }
-              OTel.endSpan(requestSpan, e);
-              interruptIfDrained();
-            });
-        future.orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS);
-        writeQueue.put(request);
-        writeQueueSize.add(1, meterAttributes);
-        return future;
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      OTel.endSpan(requestSpan, e);
-      return CompletableFuture.failedFuture(e);
-    }
+  CompletableFuture<RESP> registerRequest(REQ request) {
+    return correlator.register();
   }
 
   @Override

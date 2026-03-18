@@ -27,14 +27,8 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void register_returns_pending_future() {
-    CompletableFuture<String> future = correlator.register("req-1").future();
+    CompletableFuture<String> future = correlator.register("req-1");
     assertThat(future).isNotDone();
-  }
-
-  @Test
-  void register_returns_message_id() {
-    MultiplexedCorrelator.RegistrationResult<String> result = correlator.register("req-1");
-    assertThat(result.messageId()).isEqualTo("req-1");
   }
 
   @Test
@@ -49,23 +43,23 @@ class MultiplexedCorrelatorTest {
     correlator.register("key");
     correlator.correlate("key");
 
-    CompletableFuture<String> second = correlator.register("key").future();
+    CompletableFuture<String> second = correlator.register("key");
     assertThat(second).isNotDone();
   }
 
   @Test
   void register_after_timeout_with_same_key_succeeds() {
-    CompletableFuture<String> first = correlator.register("key").future();
+    CompletableFuture<String> first = correlator.register("key");
     first.completeExceptionally(new TimeoutException());
 
-    CompletableFuture<String> second = correlator.register("key").future();
+    CompletableFuture<String> second = correlator.register("key");
     assertThat(second).isNotDone();
   }
 
   @Test
   void register_after_close_returns_failed_future() {
     correlator.onClose(null);
-    CompletableFuture<String> future = correlator.register("req-1").future();
+    CompletableFuture<String> future = correlator.register("req-1");
     assertThat(future).isCompletedExceptionally();
   }
 
@@ -73,7 +67,7 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void correlate_completes_matching_future() {
-    CompletableFuture<String> future = correlator.register("req-1").future();
+    CompletableFuture<String> future = correlator.register("req-1");
     assertThat(correlator.correlate("req-1").success()).isTrue();
     assertThat(future).isCompletedWithValue("req-1");
   }
@@ -92,8 +86,8 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void correlate_out_of_order() {
-    CompletableFuture<String> a = correlator.register("A").future();
-    CompletableFuture<String> b = correlator.register("B").future();
+    CompletableFuture<String> a = correlator.register("A");
+    CompletableFuture<String> b = correlator.register("B");
 
     assertThat(correlator.correlate("B").success()).isTrue();
     assertThat(b).isCompletedWithValue("B");
@@ -105,8 +99,8 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void external_error_fails_only_that_request() {
-    CompletableFuture<String> a = correlator.register("A").future();
-    CompletableFuture<String> b = correlator.register("B").future();
+    CompletableFuture<String> a = correlator.register("A");
+    CompletableFuture<String> b = correlator.register("B");
     a.completeExceptionally(new TimeoutException());
     assertThat(b).isNotDone();
   }
@@ -115,8 +109,8 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void onClose_fails_with_cancellation() {
-    CompletableFuture<String> a = correlator.register("A").future();
-    CompletableFuture<String> b = correlator.register("B").future();
+    CompletableFuture<String> a = correlator.register("A");
+    CompletableFuture<String> b = correlator.register("B");
 
     correlator.onClose(null);
 
@@ -136,8 +130,8 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void onClose_fails_with_cause() {
-    CompletableFuture<String> a = correlator.register("A").future();
-    CompletableFuture<String> b = correlator.register("B").future();
+    CompletableFuture<String> a = correlator.register("A");
+    CompletableFuture<String> b = correlator.register("B");
 
     IOException cause = new IOException();
     correlator.onClose(cause);
@@ -176,7 +170,7 @@ class MultiplexedCorrelatorTest {
         new MultiplexedCorrelator<>(msg -> msg, msg -> msg, 1);
     bounded.register("fill");
     CompletableFuture<CompletableFuture<String>> registered = new CompletableFuture<>();
-    Thread thread = new Thread(() -> registered.complete(bounded.register("blocked").future()));
+    Thread thread = new Thread(() -> registered.complete(bounded.register("blocked")));
     thread.start();
     await().during(Duration.ofMillis(200)).untilAsserted(() -> assertThat(registered).isNotDone());
     bounded.correlate("fill");
@@ -189,7 +183,7 @@ class MultiplexedCorrelatorTest {
         new MultiplexedCorrelator<>(msg -> msg, msg -> msg, 1);
     bounded.register("first");
     CompletableFuture<CompletableFuture<String>> registered = new CompletableFuture<>();
-    Thread thread = new Thread(() -> registered.complete(bounded.register("blocked").future()));
+    Thread thread = new Thread(() -> registered.complete(bounded.register("blocked")));
     thread.start();
     await().during(Duration.ofMillis(200)).untilAsserted(() -> assertThat(registered).isNotDone());
     thread.interrupt();
@@ -204,11 +198,11 @@ class MultiplexedCorrelatorTest {
   void self_cleaning_releases_permit() {
     MultiplexedCorrelator<String, String> bounded =
         new MultiplexedCorrelator<>(msg -> msg, msg -> msg, 1);
-    CompletableFuture<String> first = bounded.register("first").future();
+    CompletableFuture<String> first = bounded.register("first");
 
     first.complete("external");
 
-    CompletableFuture<String> second = bounded.register("second").future();
+    CompletableFuture<String> second = bounded.register("second");
     assertThat(second).isNotDone();
   }
 
