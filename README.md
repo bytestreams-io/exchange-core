@@ -1,5 +1,16 @@
 # exchange-core
 
+[![Build](https://github.com/bytestreams-io/exchange-core/actions/workflows/build.yaml/badge.svg)](https://github.com/bytestreams-io/exchange-core/actions/workflows/build.yaml)
+[![CodeQL](https://github.com/bytestreams-io/exchange-core/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bytestreams-io/exchange-core/actions/workflows/github-code-scanning/codeql)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=io.bytestreams.exchange%3Acore&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=io.bytestreams.exchange%3Acore)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=io.bytestreams.exchange%3Acore&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=io.bytestreams.exchange%3Acore)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=io.bytestreams.exchange%3Acore&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=io.bytestreams.exchange%3Acore)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=io.bytestreams.exchange%3Acore&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=io.bytestreams.exchange%3Acore)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=io.bytestreams.exchange%3Acore&metric=bugs)](https://sonarcloud.io/summary/new_code?id=io.bytestreams.exchange%3Acore)
+[![codecov](https://codecov.io/gh/bytestreams-io/exchange-core/graph/badge.svg)](https://codecov.io/gh/bytestreams-io/exchange-core)
+[![GitHub License](https://img.shields.io/github/license/bytestreams-io/exchange-core)](LICENSE)
+[![Javadoc](https://img.shields.io/badge/javadoc-latest-blue)](https://bytestreams-io.github.io/exchange-core/)
+
 Core interfaces and channels for request-response message exchange over any transport.
 
 ## Overview
