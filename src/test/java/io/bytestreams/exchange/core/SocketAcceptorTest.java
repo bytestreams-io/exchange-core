@@ -11,7 +11,6 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -355,13 +354,16 @@ class SocketAcceptorTest {
   @Test
   void factoryErrorEscapesAsErrorAndFinallyClosesServerSocket() throws Exception {
     // An Error from the factory bypasses the inner exception handler, escapes
-    // the while loop, and reaches the finally block which marks the acceptor closed
+    // the while loop, and reaches the finally block which marks the acceptor closed.
+    // A per-thread UncaughtExceptionHandler is installed on the accept-loop VT
+    // (inside the factory) to capture the expected Error and prevent it from
+    // propagating to JUnit's error detection.
     CountDownLatch errorThrown = new CountDownLatch(1);
-    AtomicBoolean errorWasThrown = new AtomicBoolean();
+    CountDownLatch vtDead = new CountDownLatch(1);
 
     Function<Transport, Channel> factory =
         socket -> {
-          errorWasThrown.set(true);
+          Thread.currentThread().setUncaughtExceptionHandler((t, e) -> vtDead.countDown());
           errorThrown.countDown();
           throw new StackOverflowError("simulated");
         };
@@ -373,13 +375,14 @@ class SocketAcceptorTest {
       errorThrown.await(2, TimeUnit.SECONDS);
     }
 
-    assertThat(errorWasThrown.get()).isTrue();
-
     // The accept loop VT should have terminated via the finally block.
-    // The finally block sets closed=true and calls closeAllChannels(), which completes closeFuture.
+    // The finally block sets closed=true and calls closeAllChannels(), which completes
+    // closeFuture.
     await()
         .atMost(Duration.ofSeconds(2))
         .untilAsserted(() -> assertThat(acceptor.closeFuture()).isDone());
+
+    vtDead.await(2, TimeUnit.SECONDS);
   }
 
   @Test
