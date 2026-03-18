@@ -1,6 +1,7 @@
 package io.bytestreams.exchange.core;
 
 import static io.opentelemetry.sdk.testing.assertj.OpenTelemetryAssertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
@@ -157,14 +158,14 @@ class MultiplexedCorrelatorTest {
 
   @Test
   void onClose_with_no_pending_does_not_throw() {
-    correlator.onClose(null);
+    assertThatCode(() -> correlator.onClose(null)).doesNotThrowAnyException();
   }
 
   @Test
   void onClose_twice_does_not_throw() {
     correlator.register("A");
     correlator.onClose(null);
-    correlator.onClose(null);
+    assertThatCode(() -> correlator.onClose(null)).doesNotThrowAnyException();
   }
 
   // -- Backpressure --

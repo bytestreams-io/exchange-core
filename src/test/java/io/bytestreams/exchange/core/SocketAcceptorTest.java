@@ -146,7 +146,7 @@ class SocketAcceptorTest {
                 })
             .build();
     acceptor.start();
-    assertThatThrownBy(() -> acceptor.start())
+    assertThatThrownBy(acceptor::start)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("already started");
     acceptor.close().join();
@@ -154,7 +154,8 @@ class SocketAcceptorTest {
 
   @Test
   void builderValidatesMissingChannelFactory() {
-    assertThatThrownBy(() -> SocketAcceptor.builder().build())
+    var builder = SocketAcceptor.builder();
+    assertThatThrownBy(builder::build)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("channelFactory");
   }
@@ -231,20 +232,21 @@ class SocketAcceptorTest {
     channelCloseFuture.complete(null);
 
     acceptor.close().join();
+    assertThat(acceptor.closeFuture()).isDone();
   }
 
   @Test
   void builder_null_meter_throws() {
-    assertThatThrownBy(
-            () -> SocketAcceptor.builder().channelFactory(s -> mock(Channel.class)).meter(null))
+    var builder = SocketAcceptor.builder().channelFactory(s -> mock(Channel.class));
+    assertThatThrownBy(() -> builder.meter(null))
         .isInstanceOf(NullPointerException.class)
         .hasMessageContaining("meter");
   }
 
   @Test
   void builder_null_tracer_throws() {
-    assertThatThrownBy(
-            () -> SocketAcceptor.builder().channelFactory(s -> mock(Channel.class)).tracer(null))
+    var builder = SocketAcceptor.builder().channelFactory(s -> mock(Channel.class));
+    assertThatThrownBy(() -> builder.tracer(null))
         .isInstanceOf(NullPointerException.class)
         .hasMessageContaining("tracer");
   }
@@ -352,9 +354,8 @@ class SocketAcceptorTest {
 
   @Test
   void factoryErrorEscapesAsErrorAndFinallyClosesServerSocket() throws Exception {
-    // Throw an Error from the factory — this is not caught by catch(Exception),
-    // so it escapes the while loop and hits the finally block where
-    // closed.compareAndSet(false, true) succeeds
+    // An Error from the factory bypasses the inner exception handler, escapes
+    // the while loop, and reaches the finally block which marks the acceptor closed
     CountDownLatch errorThrown = new CountDownLatch(1);
     AtomicBoolean errorWasThrown = new AtomicBoolean();
 
@@ -383,12 +384,10 @@ class SocketAcceptorTest {
 
   @Test
   void closedAfterAcceptReturnsClosesSocketAndBreaks() throws Exception {
-    // To cover the "if (closed.get()) after accept()" branch (line 104 true),
-    // we need accept() to return a socket while closed is already true.
-    // Strategy: first accept a connection to confirm the loop is running.
-    // Then set closed=true via reflection (without closing the server socket),
-    // and connect another client. accept() returns the socket, sees closed=true,
-    // closes the socket and breaks out of the loop.
+    // Covers the branch where accept returns a socket while the acceptor is already closed.
+    // Strategy: accept one connection normally, then set closed via reflection without
+    // closing the server socket. The next accepted connection sees the closed flag,
+    // closes the socket, and exits the loop.
     CountDownLatch firstAccepted = new CountDownLatch(1);
     AtomicInteger callCount = new AtomicInteger();
 

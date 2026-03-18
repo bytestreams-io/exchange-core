@@ -125,6 +125,7 @@ public class MultiplexedChannel<REQ, RESP> extends AbstractClientChannel<REQ, RE
         return future;
       }
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       OTel.endSpan(requestSpan, e);
       return CompletableFuture.failedFuture(e);
     }

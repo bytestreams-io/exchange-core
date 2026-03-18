@@ -71,125 +71,116 @@ class ServerChannelTest extends AbstractChannelTestBase {
   class BuilderTests {
     @Test
     void builder_missing_transport_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("transport");
     }
 
     @Test
     void builder_missing_requestReader_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("requestReader");
     }
 
     @Test
     void builder_missing_responseWriter_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .requestHandler((req, future) -> {})
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("responseWriter");
     }
 
     @Test
     void builder_missing_requestHandler_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("requestHandler");
     }
 
     @Test
     void builder_zero_writeBufferSize_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .writeBufferSize(0)
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {})
+              .writeBufferSize(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("writeBufferSize");
     }
 
     @Test
     void builder_null_defaultTimeout_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .defaultTimeout(null)
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {})
+              .defaultTimeout(null);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_zero_defaultTimeout_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .defaultTimeout(Duration.ZERO)
-                      .build())
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {})
+              .defaultTimeout(Duration.ZERO);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_null_meter_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .meter(null))
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(() -> builder.meter(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("meter");
     }
 
     @Test
     void builder_null_tracer_throws() {
-      assertThatThrownBy(
-              () ->
-                  ServerChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestReader(TestFixture.FRAMED_READER)
-                      .responseWriter(TestFixture.FRAMED_WRITER)
-                      .requestHandler((req, future) -> {})
-                      .tracer(null))
+      var builder =
+          ServerChannel.<String, String>builder()
+              .transport(transport)
+              .requestReader(TestFixture.FRAMED_READER)
+              .responseWriter(TestFixture.FRAMED_WRITER)
+              .requestHandler((req, future) -> {});
+      assertThatThrownBy(() -> builder.tracer(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("tracer");
     }
@@ -293,6 +284,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
     @Test
     void close_waits_for_pending_write_queue_to_drain() throws Exception {
       CountDownLatch writeLatch = new CountDownLatch(1);
+      CountDownLatch handleLatch = new CountDownLatch(2);
       transport = spy(transport);
       when(transport.outputStream())
           .thenAnswer(
@@ -301,10 +293,17 @@ class ServerChannelTest extends AbstractChannelTestBase {
                 return clientRawSocket.getOutputStream();
               })
           .thenCallRealMethod();
-      var ch = createChannel((req, future) -> future.complete("resp-" + req));
+      var ch =
+          createChannel(
+              (req, future) -> {
+                future.complete("resp-" + req);
+                handleLatch.countDown();
+              });
       channel = ch;
       TestFixture.writeFramed("req1", serverOut);
       TestFixture.writeFramed("req2", serverOut);
+      // Wait for both requests to be handled so both responses are queued
+      handleLatch.await(5, TimeUnit.SECONDS);
       // Wait for the write loop to call outputStream() (blocked by latch)
       verify(transport, timeout(500)).outputStream();
       CompletableFuture<Void> close = ch.close();
@@ -398,7 +397,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
   @Nested
   class CloseLifecycle {
     @Test
-    void close_sets_closing_then_closed() throws Exception {
+    void close_sets_closing_then_closed() {
       var ch = createChannel();
       channel = ch;
       CompletableFuture<Void> closeFuture = ch.close();
@@ -407,7 +406,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void close_does_not_set_closing_when_already_closed() throws Exception {
+    void close_does_not_set_closing_when_already_closed() {
       var ch = createChannel();
       channel = ch;
       ch.status.set(ChannelStatus.CLOSED);
@@ -508,11 +507,9 @@ class ServerChannelTest extends AbstractChannelTestBase {
     }
 
     /**
-     * Tests Path 2: outer catch(Throwable) in writeLoop.
-     *
-     * <p>When transport.outputStream() throws a RuntimeException (not IOException/InterruptedException),
-     * it bypasses the inner catch and is caught by the outer Throwable safety net, which completes
-     * writeFuture exceptionally and closes the transport.
+     * Tests the write loop safety net: when the output stream throws an unchecked exception, it
+     * bypasses the inner handler and is caught by the outer safety net, which completes the write
+     * future exceptionally and closes the transport.
      */
     @Test
     void write_loop_outer_catch_throwable_closes_transport() throws Exception {
@@ -543,10 +540,6 @@ class ServerChannelTest extends AbstractChannelTestBase {
     @AfterEach
     void tearDown() {
       meterProvider.close();
-    }
-
-    private ServerChannel<String, String> createMetricChannel() {
-      return createMetricChannel((req, future) -> {});
     }
 
     private ServerChannel<String, String> createMetricChannel(

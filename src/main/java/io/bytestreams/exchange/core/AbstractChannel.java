@@ -135,9 +135,10 @@ public abstract class AbstractChannel<OUT, IN> implements Channel {
             .startSpan();
     this.closeFuture =
         CompletableFuture.allOf(writeFuture, readFuture).whenComplete((v, e) -> cleanUp(e));
-    this.requestActive = meter.upDownCounterBuilder("request.active").setUnit("{request}").build();
-    this.requestTotal = meter.counterBuilder("request.total").setUnit("{request}").build();
-    this.requestErrors = meter.counterBuilder("request.errors").setUnit("{request}").build();
+    this.requestActive =
+        meter.upDownCounterBuilder("request.active").setUnit(OTel.UNIT_REQUEST).build();
+    this.requestTotal = meter.counterBuilder("request.total").setUnit(OTel.UNIT_REQUEST).build();
+    this.requestErrors = meter.counterBuilder("request.errors").setUnit(OTel.UNIT_REQUEST).build();
     this.requestDuration = meter.histogramBuilder("request.duration").setUnit("ms").build();
     this.writer = writer;
     this.reader = reader;

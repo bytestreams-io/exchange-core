@@ -104,6 +104,7 @@ public class PipelinedChannel<REQ, RESP> extends AbstractClientChannel<REQ, RESP
         return future;
       }
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       OTel.endSpan(requestSpan, e);
       return CompletableFuture.failedFuture(e);
     }

@@ -76,118 +76,109 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
   class BuilderTests {
     @Test
     void builder_missing_transport_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("transport");
     }
 
     @Test
     void builder_missing_requestWriter_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .responseReader(TestFixture.FRAMED_READER);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("requestWriter");
     }
 
     @Test
     void builder_missing_responseReader_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("responseReader");
     }
 
     @Test
     void builder_zero_writeBufferSize_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .writeBufferSize(0)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .writeBufferSize(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("writeBufferSize");
     }
 
     @Test
     void builder_zero_maxConcurrency_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .maxConcurrency(0)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .maxConcurrency(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("maxConcurrency");
     }
 
     @Test
     void builder_null_defaultTimeout_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .defaultTimeout(null)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .defaultTimeout(null);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_zero_defaultTimeout_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .defaultTimeout(Duration.ZERO)
-                      .build())
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER)
+              .defaultTimeout(Duration.ZERO);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("defaultTimeout");
     }
 
     @Test
     void builder_null_meter_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .meter(null))
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER);
+      assertThatThrownBy(() -> builder.meter(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("meter");
     }
 
     @Test
     void builder_null_tracer_throws() {
-      assertThatThrownBy(
-              () ->
-                  PipelinedChannel.<String, String>builder()
-                      .transport(transport)
-                      .requestWriter(TestFixture.FRAMED_WRITER)
-                      .responseReader(TestFixture.FRAMED_READER)
-                      .tracer(null))
+      var builder =
+          PipelinedChannel.<String, String>builder()
+              .transport(transport)
+              .requestWriter(TestFixture.FRAMED_WRITER)
+              .responseReader(TestFixture.FRAMED_READER);
+      assertThatThrownBy(() -> builder.tracer(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("tracer");
     }
@@ -354,7 +345,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
   @Nested
   class TimeoutCascade {
     @Test
-    void timeout_on_first_cascades_to_second() throws Exception {
+    void timeout_on_first_cascades_to_second() {
       var ch = createChannel();
       channel = ch;
       CompletableFuture<String> futureA = ch.request("A", Duration.ofMillis(50));
@@ -465,7 +456,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
   @Nested
   class CloseLifecycle {
     @Test
-    void close_sets_closing_then_closed_status() throws Exception {
+    void close_sets_closing_then_closed_status() {
       channel = createChannel();
       CompletableFuture<Void> closeFuture = channel.close();
       assertThat(closeFuture).succeedsWithin(Duration.ofMillis(500));
@@ -483,7 +474,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void close_does_not_set_closing_when_already_closed() throws Exception {
+    void close_does_not_set_closing_when_already_closed() {
       channel = createChannel();
       ((PipelinedChannel<String, String>) channel).status.set(ChannelStatus.CLOSED);
       CompletableFuture<Void> future = channel.close();
@@ -493,7 +484,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     }
   }
 
-  // -- Read loop outer catch(Throwable) with pending --
+  // -- Read loop safety net with pending requests --
 
   @Nested
   class ReadLoopOuterCatch {
@@ -501,13 +492,14 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     void outer_catch_throwable_with_pending_closes_transport() throws Exception {
       CountDownLatch stateReady = new CountDownLatch(1);
       CountDownLatch errorThrown = new CountDownLatch(1);
+      CountDownLatch blockForever = new CountDownLatch(1);
       transport = spy(transport);
       // Block the write loop so it can't drain writeQueue
       lenient()
           .when(transport.outputStream())
           .thenAnswer(
               inv -> {
-                Thread.sleep(Long.MAX_VALUE);
+                blockForever.await();
                 return null;
               });
       lenient()
@@ -600,7 +592,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void request_active_incremented_on_send() throws Exception {
+    void request_active_incremented_on_send() {
       var ch = createMetricChannel();
       channel = ch;
       ch.request("hello");
@@ -670,7 +662,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void request_errors_incremented_on_failure() throws Exception {
+    void request_errors_incremented_on_failure() {
       var ch = createMetricChannel();
       channel = ch;
       CompletableFuture<String> future = ch.request("hello", Duration.ofMillis(50));
