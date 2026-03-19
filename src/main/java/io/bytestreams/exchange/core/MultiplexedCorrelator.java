@@ -26,18 +26,16 @@ final class MultiplexedCorrelator<REQ, RESP> {
     this.semaphore = new Semaphore(maxConcurrency);
   }
 
-  RegistrationResult<RESP> register(REQ request) {
+  CompletableFuture<RESP> register(REQ request) {
     String messageId = requestIdExtractor.apply(request);
     if (closing.get()) {
-      CompletableFuture<RESP> future = CompletableFuture.failedFuture(new CancellationException());
-      return new RegistrationResult<>(future, messageId);
+      return CompletableFuture.failedFuture(new CancellationException());
     }
     try {
       semaphore.acquire();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      CompletableFuture<RESP> future = CompletableFuture.failedFuture(e);
-      return new RegistrationResult<>(future, messageId);
+      return CompletableFuture.failedFuture(e);
     }
     CompletableFuture<RESP> future = new CompletableFuture<>();
     if (pending.putIfAbsent(messageId, future) != null) {
@@ -49,7 +47,7 @@ final class MultiplexedCorrelator<REQ, RESP> {
           pending.remove(messageId, future);
           semaphore.release();
         });
-    return new RegistrationResult<>(future, messageId);
+    return future;
   }
 
   CorrelationResult correlate(RESP response) {
@@ -74,8 +72,6 @@ final class MultiplexedCorrelator<REQ, RESP> {
       pending.clear();
     }
   }
-
-  record RegistrationResult<RESP>(CompletableFuture<RESP> future, String messageId) {}
 
   record CorrelationResult(boolean success, String messageId) {}
 }

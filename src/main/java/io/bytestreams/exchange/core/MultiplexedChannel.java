@@ -1,15 +1,12 @@
 package io.bytestreams.exchange.core;
 
-import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,68 +71,26 @@ public class MultiplexedChannel<REQ, RESP> extends AbstractClientChannel<REQ, RE
   }
 
   @Override
-  public CompletableFuture<RESP> request(REQ request, Duration timeout) {
-    if (timeout == null || !timeout.isPositive()) {
-      throw new IllegalArgumentException("timeout must be positive");
-    }
-    if (status() == ChannelStatus.INIT) {
-      throw new IllegalStateException("Channel not started");
-    }
-    String messageId = requestIdExtractor.apply(request);
-    Span requestSpan =
-        tracer
-            .spanBuilder("request")
-            .addLink(channelSpan.getSpanContext())
-            .setAttribute(OTel.MESSAGE_TYPE, request.getClass().getSimpleName())
-            .setAttribute(OTel.MESSAGE_ID, messageId)
-            .startSpan();
-    if (SHUTTING_DOWN.contains(status())) {
-      CancellationException channelClosed = new CancellationException("Channel closed");
-      OTel.endSpan(requestSpan, channelClosed);
-      return CompletableFuture.failedFuture(channelClosed);
-    }
-    try {
-      synchronized (writeLock) {
-        MultiplexedCorrelator.RegistrationResult<RESP> result;
-        try {
-          result = correlator.register(request);
-        } catch (DuplicateCorrelationIdException e) {
-          OTel.endSpan(requestSpan, e);
-          throw e;
-        }
-        CompletableFuture<RESP> future = result.future();
-        Attributes attrs = requestAttributes(request);
-        long startNanos = System.nanoTime();
-        requestActive.add(1, attrs);
-        future.whenComplete(
-            (resp, e) -> {
-              double durationMs = (System.nanoTime() - startNanos) / OTel.NANOS_PER_MS;
-              requestTotal.add(1, OTel.withError(attrs, e));
-              requestActive.add(-1, attrs);
-              requestDuration.record(durationMs, OTel.withError(attrs, e));
-              if (e != null) {
-                requestErrors.add(1, OTel.withError(attrs, e));
-              }
-              OTel.endSpan(requestSpan, e);
-              interruptIfDrained();
-            });
-        future.orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS);
-        writeQueue.put(request);
-        writeQueueSize.add(1, meterAttributes);
-        return future;
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      OTel.endSpan(requestSpan, e);
-      return CompletableFuture.failedFuture(e);
-    }
+  Span buildRequestSpan(REQ request) {
+    return tracer
+        .spanBuilder("request")
+        .addLink(channelSpan.getSpanContext())
+        .setAttribute(OTel.MESSAGE_TYPE, request.getClass().getSimpleName())
+        .setAttribute(OTel.MESSAGE_ID, requestIdExtractor.apply(request))
+        .startSpan();
+  }
+
+  @Override
+  CompletableFuture<RESP> registerRequest(REQ request) {
+    return correlator.register(request);
   }
 
   @Override
   protected void onInbound(RESP response) {
     MultiplexedCorrelator.CorrelationResult result = correlator.correlate(response);
     if (!result.success()) {
-      log.debug("Uncorrelated response on channel {}: messageId={}", id(), result.messageId());
+      log.debug(
+          "Uncorrelated inbound message on channel {}: messageId={}", id(), result.messageId());
       onUncorrelatedMessage(response);
     }
   }
@@ -150,7 +105,6 @@ public class MultiplexedChannel<REQ, RESP> extends AbstractClientChannel<REQ, RE
    * @param response the uncorrelated response message
    */
   protected void onUncorrelatedMessage(RESP response) {
-    log.debug("Uncorrelated response on channel {}: {}", id(), response);
     uncorrelatedHandler.onMessage(response);
   }
 

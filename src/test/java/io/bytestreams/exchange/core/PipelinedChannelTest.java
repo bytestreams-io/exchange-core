@@ -476,10 +476,13 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     @Test
     void close_does_not_set_closing_when_already_closed() {
       channel = createChannel();
-      ((PipelinedChannel<String, String>) channel).status.set(ChannelStatus.CLOSED);
       CompletableFuture<Void> future = channel.close();
-      assertThat(channel.status()).isEqualTo(ChannelStatus.CLOSED);
       assertThat(future).succeedsWithin(Duration.ofMillis(500));
+      assertThat(channel.status()).isEqualTo(ChannelStatus.CLOSED);
+      channel.close();
+      await()
+          .during(Duration.ofMillis(500))
+          .untilAsserted(() -> assertThat(channel.status()).isEqualTo(ChannelStatus.CLOSED));
       assertThat(channel.status()).isEqualTo(ChannelStatus.CLOSED);
     }
   }
@@ -528,7 +531,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
       ch.request("pending"); // registers in correlator -> hasPending()=true
       ch.status.set(ChannelStatus.CLOSING);
       stateReady.countDown();
-      errorThrown.await(2, TimeUnit.SECONDS);
+      assertThat(errorThrown.await(2, TimeUnit.SECONDS)).isTrue();
       await()
           .atMost(Duration.ofMillis(500))
           .untilAsserted(() -> assertThat(ch.closeFuture()).failsWithin(Duration.ofMillis(100)));
