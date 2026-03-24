@@ -3,7 +3,8 @@ set -o errexit
 
 SOURCE="${SOURCE:-$(git rev-parse --abbrev-ref HEAD)}"
 TIMESTAMP="$(git log -1 --pretty=%cd --date=format:'%Y%m%d%H%M%S')"
-COMMIT="$(git rev-parse --short HEAD)"
+COMMIT="${COMMIT:-$(git rev-parse HEAD)}"
+COMMIT="${COMMIT:0:7}"
 MAJOR="${MAJOR:-0}"
 REVISION="${REVISION:-$MAJOR.$SOURCE.$TIMESTAMP.$COMMIT-SNAPSHOT}"
 

@@ -65,6 +65,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           echo "SOURCE=PR${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+          echo "COMMIT=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
 
       - name: Set release variable (branch)
         if: github.event_name != 'pull_request'
@@ -87,12 +88,29 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            github.rest.issues.createComment({
+            const marker = '<!-- snapshot-version -->';
+            const body = marker + '\nVersion `${{ steps.release.outputs.revision }}` is deployed!';
+            const { data: comments } = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Version `${{ steps.release.outputs.revision }}` is deployed!'
-            })
+            });
+            const existing = comments.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }
 
       - name: Release summary
         run: |
