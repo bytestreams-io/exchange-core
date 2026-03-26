@@ -46,6 +46,8 @@ public final class ReconnectingTransport implements Transport {
   private final AtomicBoolean stale = new AtomicBoolean(true);
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Transport delegate;
+  private static final ReconnectListener NO_OP_LISTENER = new ReconnectListener() {};
+
   private volatile Throwable staleCause;
 
   private ReconnectingTransport(
@@ -204,7 +206,7 @@ public final class ReconnectingTransport implements Transport {
     private final TransportFactory factory;
     private BackoffStrategy backoffStrategy;
     private int maxAttempts = Integer.MAX_VALUE;
-    private ReconnectListener listener = new ReconnectListener() {};
+    private ReconnectListener listener = NO_OP_LISTENER;
     private Meter meter;
 
     private Builder(TransportFactory factory) {
