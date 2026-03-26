@@ -112,6 +112,8 @@ class ReconnectingTransportTest {
             .maxAttempts(3)
             .build();
 
+    // Establish initial connection via lazy init
+    transport.inputStream();
     transport.markStale(new IOException("connection lost"));
 
     assertThatThrownBy(transport::inputStream)
@@ -128,6 +130,8 @@ class ReconnectingTransportTest {
     ReconnectingTransport transport =
         ReconnectingTransport.builder(() -> delegate).maxAttempts(1).build();
 
+    // Establish connection via lazy init, then close
+    transport.inputStream();
     transport.close();
     verify(delegate).close();
   }
@@ -165,10 +169,15 @@ class ReconnectingTransportTest {
             .maxAttempts(5)
             .build();
 
+    // Lazy init connects to t1
+    transport.inputStream();
+
+    // First reconnect: closes t1, connects to t2
     transport.markStale(new IOException("connection lost"));
     transport.inputStream();
     verify(t1).close();
 
+    // Second reconnect: closes t2, connects to t3
     transport.markStale(new IOException("connection lost"));
     transport.inputStream();
     verify(t2).close();
@@ -199,6 +208,8 @@ class ReconnectingTransportTest {
             .listener(listener)
             .build();
 
+    // Establish initial connection, then trigger reconnect
+    transport.inputStream();
     transport.markStale(new IOException("connection lost"));
     transport.inputStream();
 
@@ -227,6 +238,8 @@ class ReconnectingTransportTest {
             .listener(listener)
             .build();
 
+    // Establish initial connection, then trigger failing reconnect
+    transport.inputStream();
     transport.markStale(new IOException("connection lost"));
     assertThatThrownBy(transport::inputStream).isInstanceOf(IOException.class);
 
@@ -253,20 +266,26 @@ class ReconnectingTransportTest {
             .meter(meter)
             .build();
 
+    // Establish initial connection (lazy init metrics are for initial connect)
+    transport.inputStream();
+
+    // Trigger reconnect and verify metrics
     transport.markStale(new IOException("connection lost"));
     transport.inputStream();
 
-    TestFixture.assertLongSum(metricReader, "transport.reconnect.total", 1);
-    TestFixture.assertLongSum(metricReader, "transport.reconnect.success", 1);
+    // 2 total: 1 for initial connect + 1 for reconnect
+    TestFixture.assertLongSum(metricReader, "transport.reconnect.total", 2);
+    TestFixture.assertLongSum(metricReader, "transport.reconnect.success", 2);
   }
 
   @Test
   void concurrent_failures_trigger_single_reconnect() throws Exception {
     Transport t1 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
     Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+    Transport t3 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
 
     TransportFactory factory = mock(TransportFactory.class);
-    when(factory.create()).thenReturn(t1).thenReturn(t2);
+    when(factory.create()).thenReturn(t1).thenReturn(t2).thenReturn(t3);
 
     ReconnectingTransport transport =
         ReconnectingTransport.builder(factory)
@@ -274,6 +293,8 @@ class ReconnectingTransportTest {
             .maxAttempts(3)
             .build();
 
+    // Establish initial connection via lazy init
+    transport.inputStream();
     transport.markStale(new IOException("connection lost"));
 
     java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(1);
@@ -296,6 +317,7 @@ class ReconnectingTransportTest {
     startLatch.countDown();
     doneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
 
+    // 2 calls: 1 initial connect + 1 reconnect (not 2 reconnects)
     verify(factory, times(2)).create();
   }
 

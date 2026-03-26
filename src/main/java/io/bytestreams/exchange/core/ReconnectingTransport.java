@@ -43,20 +43,18 @@ public final class ReconnectingTransport implements Transport {
   private final LongCounter reconnectSuccess;
   private final LongCounter reconnectGaveUp;
   private final ReentrantLock reconnectLock = new ReentrantLock();
-  private final AtomicBoolean stale = new AtomicBoolean(false);
+  private final AtomicBoolean stale = new AtomicBoolean(true);
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Transport delegate;
   private volatile Throwable staleCause;
 
   private ReconnectingTransport(
       TransportFactory factory,
-      Transport initialTransport,
       BackoffStrategy backoffStrategy,
       int maxAttempts,
       ReconnectListener listener,
       Meter meter) {
     this.factory = factory;
-    this.delegate = initialTransport;
     this.backoffStrategy = backoffStrategy;
     this.maxAttempts = maxAttempts;
     this.listener = listener;
@@ -102,13 +100,17 @@ public final class ReconnectingTransport implements Transport {
 
   @Override
   public Attributes attributes() {
-    return delegate.attributes();
+    Transport d = delegate;
+    return d != null ? d.attributes() : Attributes.empty();
   }
 
   @Override
   public void close() throws IOException {
     closed.set(true);
-    delegate.close();
+    Transport d = delegate;
+    if (d != null) {
+      d.close();
+    }
   }
 
   /**
@@ -147,10 +149,12 @@ public final class ReconnectingTransport implements Transport {
 
       Throwable lastCause = staleCause;
       staleCause = null;
-      listener.onDisconnect(lastCause);
-      log.warn("Transport connection lost, attempting reconnect");
-
-      Closeables.closeQuietly(delegate);
+      boolean initialConnect = delegate == null;
+      if (!initialConnect) {
+        listener.onDisconnect(lastCause);
+        log.warn("Transport connection lost, attempting reconnect");
+        Closeables.closeQuietly(delegate);
+      }
 
       for (int attempt = 1; attempt <= maxAttempts; attempt++) {
         if (closed.get() || Thread.currentThread().isInterrupted()) {
@@ -299,13 +303,11 @@ public final class ReconnectingTransport implements Transport {
       return this;
     }
 
-    public ReconnectingTransport build() throws IOException {
+    public ReconnectingTransport build() {
       if (maxAttempts <= 0) {
         throw new IllegalArgumentException("maxAttempts must be positive");
       }
-      Transport initial = factory.create();
-      return new ReconnectingTransport(
-          factory, initial, backoffStrategy, maxAttempts, listener, meter);
+      return new ReconnectingTransport(factory, backoffStrategy, maxAttempts, listener, meter);
     }
   }
 }
