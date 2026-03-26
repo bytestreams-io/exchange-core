@@ -3,7 +3,9 @@ package io.bytestreams.exchange.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -293,6 +295,88 @@ class ReconnectingTransportTest {
     startLatch.countDown();
     doneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
 
+    verify(factory, times(2)).create();
+  }
+
+  @Test
+  void wrapper_input_stream_sets_stale_on_read_failure() throws IOException {
+    InputStream failingIn = mock(InputStream.class);
+    when(failingIn.read(any(byte[].class), anyInt(), anyInt()))
+        .thenThrow(new IOException("broken"));
+    OutputStream out = mock(OutputStream.class);
+    Transport t1 = mockTransport(failingIn, out);
+
+    InputStream freshIn = mock(InputStream.class);
+    Transport t2 = mockTransport(freshIn, mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    InputStream wrapped = transport.inputStream();
+
+    assertThatThrownBy(() -> wrapped.read(new byte[10], 0, 10)).isInstanceOf(IOException.class);
+
+    transport.inputStream();
+    verify(factory, times(2)).create();
+  }
+
+  @Test
+  void wrapper_output_stream_sets_stale_on_write_failure() throws IOException {
+    InputStream in = mock(InputStream.class);
+    OutputStream failingOut = mock(OutputStream.class);
+    doThrow(new IOException("broken"))
+        .when(failingOut)
+        .write(any(byte[].class), anyInt(), anyInt());
+    Transport t1 = mockTransport(in, failingOut);
+
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    OutputStream wrapped = transport.outputStream();
+
+    assertThatThrownBy(() -> wrapped.write(new byte[10], 0, 10)).isInstanceOf(IOException.class);
+
+    transport.outputStream();
+    verify(factory, times(2)).create();
+  }
+
+  @Test
+  void wrapper_output_stream_sets_stale_on_flush_failure() throws IOException {
+    InputStream in = mock(InputStream.class);
+    OutputStream failingOut = mock(OutputStream.class);
+    doThrow(new IOException("broken")).when(failingOut).flush();
+    Transport t1 = mockTransport(in, failingOut);
+
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    OutputStream wrapped = transport.outputStream();
+
+    assertThatThrownBy(wrapped::flush).isInstanceOf(IOException.class);
+
+    transport.outputStream();
     verify(factory, times(2)).create();
   }
 }
