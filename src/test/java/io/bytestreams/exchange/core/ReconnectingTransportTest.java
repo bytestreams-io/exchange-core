@@ -522,6 +522,192 @@ class ReconnectingTransportTest {
     verify(factory, times(1)).create();
   }
 
+  @Test
+  void single_byte_read_succeeds_through_wrapper() throws IOException {
+    InputStream in = mock(InputStream.class);
+    when(in.read()).thenReturn(42);
+    Transport t1 = mockTransport(in, mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1);
+
+    ReconnectingTransport transport = ReconnectingTransport.builder(factory).maxAttempts(1).build();
+
+    InputStream wrapped = transport.inputStream();
+    assertThat(wrapped.read()).isEqualTo(42);
+  }
+
+  @Test
+  void single_byte_write_succeeds_through_wrapper() throws IOException {
+    OutputStream out = mock(OutputStream.class);
+    Transport t1 = mockTransport(mock(InputStream.class), out);
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1);
+
+    ReconnectingTransport transport = ReconnectingTransport.builder(factory).maxAttempts(1).build();
+
+    OutputStream wrapped = transport.outputStream();
+    wrapped.write(42);
+    verify(out).write(42);
+  }
+
+  @Test
+  void backoff_delay_is_applied_between_attempts() throws IOException {
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create())
+        .thenReturn(initial)
+        .thenThrow(new IOException("fail"))
+        .thenReturn(mockTransport(mock(InputStream.class), mock(OutputStream.class)));
+
+    AtomicInteger backoffCalls = new AtomicInteger();
+    BackoffStrategy strategy =
+        attempt -> {
+          backoffCalls.incrementAndGet();
+          return 1_000L; // 1 microsecond — enough to exercise parkNanos
+        };
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory).backoffStrategy(strategy).maxAttempts(3).build();
+
+    transport.inputStream();
+    transport.markStale(new IOException("connection lost"));
+    transport.inputStream();
+
+    assertThat(backoffCalls.get()).isEqualTo(1);
+  }
+
+  @Test
+  void checkAborted_throws_when_closed_before_attempt() throws IOException {
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    AtomicInteger factoryCalls = new AtomicInteger();
+    TransportFactory factory =
+        () -> {
+          int c = factoryCalls.incrementAndGet();
+          if (c == 1) return initial;
+          // Should not reach here — checkAborted should fire first
+          return mockTransport(mock(InputStream.class), mock(OutputStream.class));
+        };
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    transport.inputStream();
+    // Close, then mark stale — reconnect() acquires lock, sees closed in the double-check
+    transport.close();
+    transport.markStale(new IOException("connection lost"));
+
+    assertThatThrownBy(transport::inputStream)
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("closed");
+  }
+
+  @Test
+  void checkAborted_throws_when_thread_interrupted_during_reconnect() throws Exception {
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create())
+        .thenReturn(initial)
+        .thenThrow(new IOException("fail1"))
+        .thenThrow(new IOException("fail2"));
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(5)
+            .build();
+
+    transport.inputStream();
+    transport.markStale(new IOException("connection lost"));
+
+    // Interrupt current thread before calling inputStream
+    Thread.currentThread().interrupt();
+
+    assertThatThrownBy(transport::inputStream)
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("aborted");
+
+    // Clear the interrupted flag
+    Thread.interrupted();
+  }
+
+  @Test
+  void closed_after_lock_acquired_in_reconnect() throws Exception {
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    CountDownLatch factoryEntered = new CountDownLatch(1);
+    CountDownLatch proceed = new CountDownLatch(1);
+
+    TransportFactory factory =
+        new TransportFactory() {
+          private final AtomicInteger calls = new AtomicInteger();
+
+          @Override
+          public Transport create() throws IOException {
+            int c = calls.incrementAndGet();
+            if (c == 1) return initial;
+            // Signal we're inside factory, wait for main thread
+            factoryEntered.countDown();
+            try {
+              proceed.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+            return mockTransport(mock(InputStream.class), mock(OutputStream.class));
+          }
+        };
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    // Establish connection
+    transport.inputStream();
+    transport.markStale(new IOException("connection lost"));
+
+    // Thread 1: starts reconnect, holds the lock, blocks in factory
+    CountDownLatch thread1Done = new CountDownLatch(1);
+    Thread.ofVirtual()
+        .start(
+            () -> {
+              try {
+                transport.inputStream();
+              } catch (IOException e) {
+                // expected
+              } finally {
+                thread1Done.countDown();
+              }
+            });
+
+    // Wait for thread1 to enter factory
+    factoryEntered.await(5, TimeUnit.SECONDS);
+
+    // Mark stale again and close — when thread2 acquires the lock,
+    // it should see closed=true in the double-check
+    transport.markStale(new IOException("another failure"));
+    // Let thread1 finish (it will succeed and set stale=false)
+    proceed.countDown();
+    thread1Done.await(5, TimeUnit.SECONDS);
+
+    // Now close
+    transport.close();
+    transport.markStale(new IOException("yet another"));
+
+    // This should hit the closed check inside reconnect() after acquiring the lock
+    assertThatThrownBy(transport::inputStream)
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("closed");
+  }
+
   @Nested
   class IntegrationTest {
 

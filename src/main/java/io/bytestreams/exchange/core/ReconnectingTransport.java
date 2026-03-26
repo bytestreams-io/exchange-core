@@ -132,8 +132,8 @@ public final class ReconnectingTransport implements Transport {
   }
 
   private void checkAborted() throws IOException {
-    if (closed.get() || Thread.currentThread().isInterrupted()) {
-      throw new IOException("Reconnect aborted: transport closed or thread interrupted");
+    if (Thread.currentThread().isInterrupted()) {
+      throw new IOException("Reconnect aborted: thread interrupted");
     }
   }
 
@@ -153,9 +153,6 @@ public final class ReconnectingTransport implements Transport {
       // Double-check: another thread may have already reconnected
       if (!stale.get()) {
         return delegate;
-      }
-      if (closed.get()) {
-        throw new IOException("Transport is closed");
       }
 
       Throwable lastCause = staleCause;
