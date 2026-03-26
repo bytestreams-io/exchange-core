@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,6 +20,12 @@ import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -213,7 +221,7 @@ class ReconnectingTransportTest {
     transport.markStale(new IOException("connection lost"));
     transport.inputStream();
 
-    var inOrder = org.mockito.Mockito.inOrder(listener);
+    var inOrder = inOrder(listener);
     inOrder.verify(listener).onDisconnect(any(IOException.class));
     inOrder.verify(listener).onReconnecting(1);
     inOrder.verify(listener).onReconnected(1);
@@ -243,7 +251,7 @@ class ReconnectingTransportTest {
     transport.markStale(new IOException("connection lost"));
     assertThatThrownBy(transport::inputStream).isInstanceOf(IOException.class);
 
-    verify(listener, org.mockito.Mockito.atLeastOnce()).onGaveUp(eq(2), any(IOException.class));
+    verify(listener, atLeastOnce()).onGaveUp(eq(2), any(IOException.class));
   }
 
   @Test
@@ -297,8 +305,8 @@ class ReconnectingTransportTest {
     transport.inputStream();
     transport.markStale(new IOException("connection lost"));
 
-    java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.CountDownLatch doneLatch = new java.util.concurrent.CountDownLatch(2);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(2);
 
     Runnable task =
         () -> {
@@ -315,7 +323,7 @@ class ReconnectingTransportTest {
     Thread.ofVirtual().start(task);
     Thread.ofVirtual().start(task);
     startLatch.countDown();
-    doneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+    doneLatch.await(5, TimeUnit.SECONDS);
 
     // 2 calls: 1 initial connect + 1 reconnect (not 2 reconnects)
     verify(factory, times(2)).create();
@@ -409,15 +417,15 @@ class ReconnectingTransportTest {
     @Test
     void channel_recovers_after_transport_failure() throws Exception {
       // Set up two piped stream pairs (connection 1 and connection 2)
-      java.io.PipedInputStream clientIn1 = new java.io.PipedInputStream();
-      java.io.PipedOutputStream serverOut1 = new java.io.PipedOutputStream(clientIn1);
-      java.io.PipedInputStream serverIn1 = new java.io.PipedInputStream();
-      java.io.PipedOutputStream clientOut1 = new java.io.PipedOutputStream(serverIn1);
+      PipedInputStream clientIn1 = new PipedInputStream();
+      PipedOutputStream serverOut1 = new PipedOutputStream(clientIn1);
+      PipedInputStream serverIn1 = new PipedInputStream();
+      PipedOutputStream clientOut1 = new PipedOutputStream(serverIn1);
 
-      java.io.PipedInputStream clientIn2 = new java.io.PipedInputStream();
-      java.io.PipedOutputStream serverOut2 = new java.io.PipedOutputStream(clientIn2);
-      java.io.PipedInputStream serverIn2 = new java.io.PipedInputStream();
-      java.io.PipedOutputStream clientOut2 = new java.io.PipedOutputStream(serverIn2);
+      PipedInputStream clientIn2 = new PipedInputStream();
+      PipedOutputStream serverOut2 = new PipedOutputStream(clientIn2);
+      PipedInputStream serverIn2 = new PipedInputStream();
+      PipedOutputStream clientOut2 = new PipedOutputStream(serverIn2);
 
       // Transport 1 and 2 using piped streams
       Transport t1 =
@@ -459,8 +467,7 @@ class ReconnectingTransportTest {
             }
           };
 
-      java.util.concurrent.atomic.AtomicInteger callCount =
-          new java.util.concurrent.atomic.AtomicInteger(0);
+      AtomicInteger callCount = new AtomicInteger(0);
       TransportFactory factory =
           () -> {
             int c = callCount.incrementAndGet();
@@ -469,8 +476,7 @@ class ReconnectingTransportTest {
             throw new IOException("no more transports");
           };
 
-      java.util.concurrent.CountDownLatch reconnectedLatch =
-          new java.util.concurrent.CountDownLatch(1);
+      CountDownLatch reconnectedLatch = new CountDownLatch(1);
 
       ReconnectingTransport reconnecting =
           ReconnectingTransport.builder(factory)
@@ -499,7 +505,7 @@ class ReconnectingTransportTest {
                   return false;
                 }
               },
-              java.time.Duration.ofSeconds(5),
+              Duration.ofSeconds(5),
               AbstractChannel.DEFAULT_ERROR_BACKOFF_NANOS,
               OTel.meter(),
               OTel.tracer());
@@ -518,7 +524,7 @@ class ReconnectingTransportTest {
               });
 
       // Send first request and get response
-      String resp1 = channel.request("hello").get(3, java.util.concurrent.TimeUnit.SECONDS);
+      String resp1 = channel.request("hello").get(3, TimeUnit.SECONDS);
       assertThat(resp1).isEqualTo("reply1:hello");
 
       // Kill connection 1 (simulates network failure)
@@ -526,7 +532,7 @@ class ReconnectingTransportTest {
       serverIn1.close();
 
       // Wait for reconnect to complete before sending next request
-      assertThat(reconnectedLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      assertThat(reconnectedLatch.await(5, TimeUnit.SECONDS)).isTrue();
 
       // Server thread on connection 2: read request, respond
       Thread.ofVirtual()
@@ -541,10 +547,10 @@ class ReconnectingTransportTest {
               });
 
       // Send second request — should succeed on reconnected transport
-      String resp2 = channel.request("world").get(5, java.util.concurrent.TimeUnit.SECONDS);
+      String resp2 = channel.request("world").get(5, TimeUnit.SECONDS);
       assertThat(resp2).isEqualTo("reply2:world");
 
-      channel.close().get(3, java.util.concurrent.TimeUnit.SECONDS);
+      channel.close().get(3, TimeUnit.SECONDS);
     }
   }
 }
