@@ -411,6 +411,117 @@ class ReconnectingTransportTest {
     verify(factory, times(2)).create();
   }
 
+  @Test
+  void outputStream_reconnects_when_delegate_throws() throws IOException {
+    Transport dead = mock(Transport.class);
+    when(dead.inputStream()).thenReturn(mock(InputStream.class));
+    when(dead.outputStream()).thenThrow(new IOException("broken pipe"));
+    when(dead.attributes()).thenReturn(Attributes.empty());
+
+    Transport fresh = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(dead).thenReturn(fresh);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    // First outputStream() hits dead delegate, catch retries via reconnect
+    OutputStream result = transport.outputStream();
+    assertThat(result).isNotNull();
+    verify(factory, times(2)).create();
+  }
+
+  @Test
+  void builder_rejects_non_positive_max_attempts() {
+    assertThatThrownBy(
+            () -> ReconnectingTransport.builder(() -> mock(Transport.class)).maxAttempts(0).build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("maxAttempts must be positive");
+
+    assertThatThrownBy(
+            () ->
+                ReconnectingTransport.builder(() -> mock(Transport.class)).maxAttempts(-1).build())
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void single_byte_read_sets_stale_on_failure() throws IOException {
+    InputStream failingIn = mock(InputStream.class);
+    when(failingIn.read()).thenThrow(new IOException("broken"));
+    Transport t1 = mockTransport(failingIn, mock(OutputStream.class));
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    InputStream wrapped = transport.inputStream();
+    assertThatThrownBy(wrapped::read).isInstanceOf(IOException.class);
+
+    // Next call should reconnect
+    transport.inputStream();
+    verify(factory, times(2)).create();
+  }
+
+  @Test
+  void single_byte_write_sets_stale_on_failure() throws IOException {
+    OutputStream failingOut = mock(OutputStream.class);
+    doThrow(new IOException("broken")).when(failingOut).write(42);
+    Transport t1 = mockTransport(mock(InputStream.class), failingOut);
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    OutputStream wrapped = transport.outputStream();
+    assertThatThrownBy(() -> wrapped.write(42)).isInstanceOf(IOException.class);
+
+    transport.outputStream();
+    verify(factory, times(2)).create();
+  }
+
+  @Test
+  void close_prevents_subsequent_reconnect() throws IOException {
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(initial);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    // Establish initial connection, then close
+    transport.inputStream();
+    transport.close();
+
+    // Marking stale after close should not reconnect
+    transport.markStale(new IOException("connection lost"));
+    assertThatThrownBy(transport::inputStream)
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("closed");
+
+    // Factory was only called once (initial connect)
+    verify(factory, times(1)).create();
+  }
+
   @Nested
   class IntegrationTest {
 
