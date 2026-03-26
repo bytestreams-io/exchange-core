@@ -175,8 +175,7 @@ public final class ReconnectingTransport implements Transport {
         log.info("Reconnect attempt {}/{}", attempt, maxAttempts);
 
         try {
-          Transport fresh = factory.create();
-          delegate = fresh;
+          delegate = factory.create();
           stale.set(false);
           listener.onReconnected(attempt);
           reconnectSuccess.add(1, Attributes.empty());
@@ -201,6 +200,47 @@ public final class ReconnectingTransport implements Transport {
       throw new IOException("Failed to reconnect after " + maxAttempts + " attempts", lastCause);
     } finally {
       reconnectLock.unlock();
+    }
+  }
+
+  public static final class Builder {
+    private final TransportFactory factory;
+    private BackoffStrategy backoffStrategy;
+    private int maxAttempts = Integer.MAX_VALUE;
+    private ReconnectListener listener = new ReconnectListener() {};
+    private Meter meter;
+
+    private Builder(TransportFactory factory) {
+      this.factory = factory;
+      this.backoffStrategy = ExponentialBackoff.withDefaults();
+      this.meter = OTel.meter();
+    }
+
+    public Builder backoffStrategy(BackoffStrategy backoffStrategy) {
+      this.backoffStrategy = Objects.requireNonNull(backoffStrategy, "backoffStrategy");
+      return this;
+    }
+
+    public Builder maxAttempts(int maxAttempts) {
+      this.maxAttempts = maxAttempts;
+      return this;
+    }
+
+    public Builder listener(ReconnectListener listener) {
+      this.listener = Objects.requireNonNull(listener, "listener");
+      return this;
+    }
+
+    public Builder meter(Meter meter) {
+      this.meter = Objects.requireNonNull(meter, "meter");
+      return this;
+    }
+
+    public ReconnectingTransport build() {
+      if (maxAttempts <= 0) {
+        throw new IllegalArgumentException("maxAttempts must be positive");
+      }
+      return new ReconnectingTransport(factory, backoffStrategy, maxAttempts, listener, meter);
     }
   }
 
@@ -265,47 +305,6 @@ public final class ReconnectingTransport implements Transport {
         markStale(e);
         throw e;
       }
-    }
-  }
-
-  public static final class Builder {
-    private final TransportFactory factory;
-    private BackoffStrategy backoffStrategy;
-    private int maxAttempts = Integer.MAX_VALUE;
-    private ReconnectListener listener = new ReconnectListener() {};
-    private Meter meter;
-
-    private Builder(TransportFactory factory) {
-      this.factory = factory;
-      this.backoffStrategy = ExponentialBackoff.withDefaults();
-      this.meter = OTel.meter();
-    }
-
-    public Builder backoffStrategy(BackoffStrategy backoffStrategy) {
-      this.backoffStrategy = Objects.requireNonNull(backoffStrategy, "backoffStrategy");
-      return this;
-    }
-
-    public Builder maxAttempts(int maxAttempts) {
-      this.maxAttempts = maxAttempts;
-      return this;
-    }
-
-    public Builder listener(ReconnectListener listener) {
-      this.listener = Objects.requireNonNull(listener, "listener");
-      return this;
-    }
-
-    public Builder meter(Meter meter) {
-      this.meter = Objects.requireNonNull(meter, "meter");
-      return this;
-    }
-
-    public ReconnectingTransport build() {
-      if (maxAttempts <= 0) {
-        throw new IllegalArgumentException("maxAttempts must be positive");
-      }
-      return new ReconnectingTransport(factory, backoffStrategy, maxAttempts, listener, meter);
     }
   }
 }
