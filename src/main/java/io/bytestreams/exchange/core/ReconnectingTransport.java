@@ -72,6 +72,10 @@ public final class ReconnectingTransport implements Transport {
     return new Builder(Objects.requireNonNull(factory, "factory"));
   }
 
+  /**
+   * Returns a wrapped input stream from the current (or reconnected) delegate. If the delegate's
+   * {@code inputStream()} throws, marks the transport stale and retries once via reconnect.
+   */
   @Override
   public InputStream inputStream() throws IOException {
     try {
@@ -82,6 +86,10 @@ public final class ReconnectingTransport implements Transport {
     }
   }
 
+  /**
+   * Returns a wrapped output stream from the current (or reconnected) delegate. If the delegate's
+   * {@code outputStream()} throws, marks the transport stale and retries once via reconnect.
+   */
   @Override
   public OutputStream outputStream() throws IOException {
     try {
@@ -111,6 +119,7 @@ public final class ReconnectingTransport implements Transport {
    *     ReconnectListener#onDisconnect(Throwable)}
    */
   void markStale(Throwable cause) {
+    // Order matters: cause must be visible before the stale flag is read by reconnect()
     staleCause = cause;
     stale.set(true);
   }
@@ -155,8 +164,13 @@ public final class ReconnectingTransport implements Transport {
         try {
           Transport fresh = factory.create();
           // Best-effort validation: check streams are accessible
-          fresh.inputStream();
-          fresh.outputStream();
+          try {
+            fresh.inputStream();
+            fresh.outputStream();
+          } catch (IOException e) {
+            Closeables.closeQuietly(fresh);
+            throw e;
+          }
           delegate = fresh;
           stale.set(false);
           listener.onReconnected(attempt);
