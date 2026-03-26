@@ -18,6 +18,7 @@ import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class ReconnectingTransportTest {
@@ -378,5 +379,150 @@ class ReconnectingTransportTest {
 
     transport.outputStream();
     verify(factory, times(2)).create();
+  }
+
+  @Nested
+  class IntegrationTest {
+
+    @Test
+    void channel_recovers_after_transport_failure() throws Exception {
+      // Set up two piped stream pairs (connection 1 and connection 2)
+      java.io.PipedInputStream clientIn1 = new java.io.PipedInputStream();
+      java.io.PipedOutputStream serverOut1 = new java.io.PipedOutputStream(clientIn1);
+      java.io.PipedInputStream serverIn1 = new java.io.PipedInputStream();
+      java.io.PipedOutputStream clientOut1 = new java.io.PipedOutputStream(serverIn1);
+
+      java.io.PipedInputStream clientIn2 = new java.io.PipedInputStream();
+      java.io.PipedOutputStream serverOut2 = new java.io.PipedOutputStream(clientIn2);
+      java.io.PipedInputStream serverIn2 = new java.io.PipedInputStream();
+      java.io.PipedOutputStream clientOut2 = new java.io.PipedOutputStream(serverIn2);
+
+      // Transport 1 and 2 using piped streams
+      Transport t1 =
+          new Transport() {
+            public InputStream inputStream() {
+              return clientIn1;
+            }
+
+            public OutputStream outputStream() {
+              return clientOut1;
+            }
+
+            public Attributes attributes() {
+              return Attributes.empty();
+            }
+
+            public void close() throws IOException {
+              clientIn1.close();
+              clientOut1.close();
+            }
+          };
+      Transport t2 =
+          new Transport() {
+            public InputStream inputStream() {
+              return clientIn2;
+            }
+
+            public OutputStream outputStream() {
+              return clientOut2;
+            }
+
+            public Attributes attributes() {
+              return Attributes.empty();
+            }
+
+            public void close() throws IOException {
+              clientIn2.close();
+              clientOut2.close();
+            }
+          };
+
+      java.util.concurrent.atomic.AtomicInteger callCount =
+          new java.util.concurrent.atomic.AtomicInteger(0);
+      TransportFactory factory =
+          () -> {
+            int c = callCount.incrementAndGet();
+            if (c == 1) return t1;
+            if (c == 2) return t2;
+            throw new IOException("no more transports");
+          };
+
+      java.util.concurrent.CountDownLatch reconnectedLatch =
+          new java.util.concurrent.CountDownLatch(1);
+
+      ReconnectingTransport reconnecting =
+          ReconnectingTransport.builder(factory)
+              .backoffStrategy(attempt -> 0L)
+              .maxAttempts(3)
+              .listener(
+                  new ReconnectListener() {
+                    @Override
+                    public void onReconnected(int attempt) {
+                      reconnectedLatch.countDown();
+                    }
+                  })
+              .build();
+
+      // Build a pipelined channel that tolerates errors (returns false)
+      PipelinedChannel<String, String> channel =
+          new PipelinedChannel<>(
+              reconnecting,
+              Integer.MAX_VALUE,
+              TestFixture.FRAMED_WRITER,
+              TestFixture.FRAMED_READER,
+              1,
+              new ErrorHandler<>() {
+                @Override
+                public boolean stopOnError(Channel ch, ErrorContext<String, String> context) {
+                  return false;
+                }
+              },
+              java.time.Duration.ofSeconds(5),
+              AbstractChannel.DEFAULT_ERROR_BACKOFF_NANOS,
+              OTel.meter(),
+              OTel.tracer());
+      channel.start();
+
+      // Server thread: read request on connection 1, respond
+      Thread.ofVirtual()
+          .start(
+              () -> {
+                try {
+                  String req = TestFixture.FRAMED_READER.read(serverIn1);
+                  TestFixture.FRAMED_WRITER.write("reply1:" + req, serverOut1);
+                } catch (IOException e) {
+                  // expected when we close the pipe
+                }
+              });
+
+      // Send first request and get response
+      String resp1 = channel.request("hello").get(3, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(resp1).isEqualTo("reply1:hello");
+
+      // Kill connection 1 (simulates network failure)
+      serverOut1.close();
+      serverIn1.close();
+
+      // Wait for reconnect to complete before sending next request
+      assertThat(reconnectedLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+      // Server thread on connection 2: read request, respond
+      Thread.ofVirtual()
+          .start(
+              () -> {
+                try {
+                  String req = TestFixture.FRAMED_READER.read(serverIn2);
+                  TestFixture.FRAMED_WRITER.write("reply2:" + req, serverOut2);
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              });
+
+      // Send second request — should succeed on reconnected transport
+      String resp2 = channel.request("world").get(5, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(resp2).isEqualTo("reply2:world");
+
+      channel.close().get(3, java.util.concurrent.TimeUnit.SECONDS);
+    }
   }
 }
