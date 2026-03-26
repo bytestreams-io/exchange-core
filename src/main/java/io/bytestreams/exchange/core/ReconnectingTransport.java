@@ -106,10 +106,15 @@ public final class ReconnectingTransport implements Transport {
 
   @Override
   public void close() throws IOException {
-    closed.set(true);
-    Transport d = delegate;
-    if (d != null) {
-      d.close();
+    reconnectLock.lock();
+    try {
+      closed.set(true);
+      Transport d = delegate;
+      if (d != null) {
+        d.close();
+      }
+    } finally {
+      reconnectLock.unlock();
     }
   }
 
@@ -124,6 +129,12 @@ public final class ReconnectingTransport implements Transport {
     // Order matters: cause must be visible before the stale flag is read by reconnect()
     staleCause = cause;
     stale.set(true);
+  }
+
+  private void checkAborted() throws IOException {
+    if (closed.get() || Thread.currentThread().isInterrupted()) {
+      throw new IOException("Reconnect aborted: transport closed or thread interrupted");
+    }
   }
 
   private Transport getOrReconnect() throws IOException {
@@ -157,9 +168,7 @@ public final class ReconnectingTransport implements Transport {
       }
 
       for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-        if (closed.get() || Thread.currentThread().isInterrupted()) {
-          throw new IOException("Reconnect aborted: transport closed or thread interrupted");
-        }
+        checkAborted();
 
         listener.onReconnecting(attempt);
         reconnectTotal.add(1, Attributes.empty());
@@ -167,14 +176,6 @@ public final class ReconnectingTransport implements Transport {
 
         try {
           Transport fresh = factory.create();
-          // Best-effort validation: check streams are accessible
-          try {
-            fresh.inputStream();
-            fresh.outputStream();
-          } catch (IOException e) {
-            Closeables.closeQuietly(fresh);
-            throw e;
-          }
           delegate = fresh;
           stale.set(false);
           listener.onReconnected(attempt);
@@ -185,16 +186,11 @@ public final class ReconnectingTransport implements Transport {
           lastCause = e;
           log.debug("Reconnect attempt {} failed: {}", attempt, e.getMessage());
           if (attempt < maxAttempts) {
-            if (closed.get() || Thread.currentThread().isInterrupted()) {
-              throw new IOException("Reconnect aborted: transport closed or thread interrupted");
-            }
             long delayNanos = backoffStrategy.delayNanos(attempt);
             if (delayNanos > 0) {
               LockSupport.parkNanos(delayNanos);
             }
-            if (closed.get() || Thread.currentThread().isInterrupted()) {
-              throw new IOException("Reconnect aborted: transport closed or thread interrupted");
-            }
+            checkAborted();
           }
         }
       }
@@ -242,7 +238,8 @@ public final class ReconnectingTransport implements Transport {
     @Override
     public void write(int b) throws IOException {
       try {
-        super.write(b);
+        // Bypass FilterOutputStream.write(int) which allocates a new byte[1] per call
+        out.write(b);
       } catch (IOException e) {
         markStale(e);
         throw e;
@@ -252,6 +249,7 @@ public final class ReconnectingTransport implements Transport {
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
       try {
+        // Bypass FilterOutputStream.write(byte[],int,int) which loops over write(int)
         out.write(b, off, len);
       } catch (IOException e) {
         markStale(e);

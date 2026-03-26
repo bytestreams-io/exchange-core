@@ -42,7 +42,7 @@ public final class ExponentialBackoff implements BackoffStrategy {
   public long delayNanos(int attempt) {
     long delay;
     int shift = attempt - 1;
-    // Guard against overflow: large shifts or shifts that would produce a negative result
+    // baseDelayNanos << shift overflows long well before shift reaches 63 (e.g. at ~34 for 100ms)
     if (shift >= Long.SIZE - 1 || (shift > 0 && baseDelayNanos > (Long.MAX_VALUE >> shift))) {
       delay = maxDelayNanos;
     } else {
