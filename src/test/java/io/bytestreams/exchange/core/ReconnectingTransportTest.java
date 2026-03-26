@@ -2,12 +2,17 @@ package io.bytestreams.exchange.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -172,5 +177,83 @@ class ReconnectingTransportTest {
   void builder_rejects_null_factory() {
     assertThatThrownBy(() -> ReconnectingTransport.builder(null))
         .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  void listener_receives_callbacks_in_order() throws IOException {
+    Transport t1 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectListener listener = mock(ReconnectListener.class);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .listener(listener)
+            .build();
+
+    transport.markStale(new IOException("connection lost"));
+    transport.inputStream();
+
+    var inOrder = org.mockito.Mockito.inOrder(listener);
+    inOrder.verify(listener).onDisconnect(any(IOException.class));
+    inOrder.verify(listener).onReconnecting(1);
+    inOrder.verify(listener).onReconnected(1);
+  }
+
+  @Test
+  void listener_receives_gave_up_on_exhaustion() throws IOException {
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create())
+        .thenReturn(initial)
+        .thenThrow(new IOException("fail1"))
+        .thenThrow(new IOException("fail2"));
+
+    ReconnectListener listener = mock(ReconnectListener.class);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(2)
+            .listener(listener)
+            .build();
+
+    transport.markStale(new IOException("connection lost"));
+    assertThatThrownBy(transport::inputStream).isInstanceOf(IOException.class);
+
+    verify(listener, org.mockito.Mockito.atLeastOnce()).onGaveUp(eq(2), any(IOException.class));
+  }
+
+  @Test
+  void otel_metrics_are_recorded() throws IOException {
+    InMemoryMetricReader metricReader = InMemoryMetricReader.create();
+    SdkMeterProvider meterProvider =
+        SdkMeterProvider.builder().registerMetricReader(metricReader).build();
+    Meter meter = meterProvider.get("test");
+
+    Transport t1 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .meter(meter)
+            .build();
+
+    transport.markStale(new IOException("connection lost"));
+    transport.inputStream();
+
+    TestFixture.assertLongSum(metricReader, "transport.reconnect.total", 1);
+    TestFixture.assertLongSum(metricReader, "transport.reconnect.success", 1);
   }
 }
