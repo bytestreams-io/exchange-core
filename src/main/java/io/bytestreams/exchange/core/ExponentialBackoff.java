@@ -40,19 +40,20 @@ public final class ExponentialBackoff implements BackoffStrategy {
 
   @Override
   public long delayNanos(int attempt) {
-    long delay;
-    int shift = attempt - 1;
-    // baseDelayNanos << shift overflows long well before shift reaches 63 (e.g. at ~34 for 100ms)
-    if (shift >= Long.SIZE - 1 || (shift > 0 && baseDelayNanos > (Long.MAX_VALUE >> shift))) {
-      delay = maxDelayNanos;
-    } else {
-      delay = Math.min(baseDelayNanos << shift, maxDelayNanos);
-    }
+    long delay = Math.min(exponential(attempt), maxDelayNanos);
     if (jitterFactor > 0.0) {
-      long jitter = (long) (delay * jitterFactor * ThreadLocalRandom.current().nextDouble());
-      delay += jitter;
+      delay += (long) (delay * jitterFactor * ThreadLocalRandom.current().nextDouble());
     }
     return delay;
+  }
+
+  /** Returns {@code baseDelayNanos * 2^(attempt-1)}, clamping to {@link Long#MAX_VALUE} on overflow. */
+  private long exponential(int attempt) {
+    int shift = attempt - 1;
+    if (shift >= Long.SIZE - 1 || (shift > 0 && baseDelayNanos > (Long.MAX_VALUE >> shift))) {
+      return Long.MAX_VALUE;
+    }
+    return baseDelayNanos << shift;
   }
 
   public static final class Builder {
