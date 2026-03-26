@@ -74,12 +74,22 @@ public final class ReconnectingTransport implements Transport {
 
   @Override
   public InputStream inputStream() throws IOException {
-    return new ReconnectingInputStream(getOrReconnect().inputStream());
+    try {
+      return new ReconnectingInputStream(getOrReconnect().inputStream());
+    } catch (IOException e) {
+      markStale(e);
+      return new ReconnectingInputStream(getOrReconnect().inputStream());
+    }
   }
 
   @Override
   public OutputStream outputStream() throws IOException {
-    return new ReconnectingOutputStream(getOrReconnect().outputStream());
+    try {
+      return new ReconnectingOutputStream(getOrReconnect().outputStream());
+    } catch (IOException e) {
+      markStale(e);
+      return new ReconnectingOutputStream(getOrReconnect().outputStream());
+    }
   }
 
   @Override
@@ -157,6 +167,9 @@ public final class ReconnectingTransport implements Transport {
           lastCause = e;
           log.debug("Reconnect attempt {} failed: {}", attempt, e.getMessage());
           if (attempt < maxAttempts) {
+            if (closed.get() || Thread.currentThread().isInterrupted()) {
+              throw new IOException("Reconnect aborted: transport closed or thread interrupted");
+            }
             long delayNanos = backoffStrategy.delayNanos(attempt);
             if (delayNanos > 0) {
               LockSupport.parkNanos(delayNanos);

@@ -89,16 +89,26 @@ class ReconnectingTransportTest {
 
   @Test
   void max_attempts_exhausted_throws_io_exception() throws IOException {
-    TransportFactory factory = mock(TransportFactory.class);
-    when(factory.create()).thenThrow(new IOException("connection refused"));
+    Transport initial = mockTransport(mock(InputStream.class), mock(OutputStream.class));
 
-    assertThatThrownBy(
-            () ->
-                ReconnectingTransport.builder(factory)
-                    .backoffStrategy(attempt -> 0L)
-                    .maxAttempts(3)
-                    .build())
-        .isInstanceOf(IOException.class);
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create())
+        .thenReturn(initial)
+        .thenThrow(new IOException("fail1"))
+        .thenThrow(new IOException("fail2"))
+        .thenThrow(new IOException("fail3"));
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    transport.markStale(new IOException("connection lost"));
+
+    assertThatThrownBy(transport::inputStream)
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("Failed to reconnect after 3 attempts");
   }
 
   @Test
