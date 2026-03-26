@@ -256,4 +256,43 @@ class ReconnectingTransportTest {
     TestFixture.assertLongSum(metricReader, "transport.reconnect.total", 1);
     TestFixture.assertLongSum(metricReader, "transport.reconnect.success", 1);
   }
+
+  @Test
+  void concurrent_failures_trigger_single_reconnect() throws Exception {
+    Transport t1 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+    Transport t2 = mockTransport(mock(InputStream.class), mock(OutputStream.class));
+
+    TransportFactory factory = mock(TransportFactory.class);
+    when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+    ReconnectingTransport transport =
+        ReconnectingTransport.builder(factory)
+            .backoffStrategy(attempt -> 0L)
+            .maxAttempts(3)
+            .build();
+
+    transport.markStale(new IOException("connection lost"));
+
+    java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch doneLatch = new java.util.concurrent.CountDownLatch(2);
+
+    Runnable task =
+        () -> {
+          try {
+            startLatch.await();
+            transport.inputStream();
+          } catch (Exception e) {
+            // ignore
+          } finally {
+            doneLatch.countDown();
+          }
+        };
+
+    Thread.ofVirtual().start(task);
+    Thread.ofVirtual().start(task);
+    startLatch.countDown();
+    doneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+
+    verify(factory, times(2)).create();
+  }
 }
