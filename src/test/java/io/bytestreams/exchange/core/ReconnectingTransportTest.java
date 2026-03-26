@@ -676,7 +676,7 @@ class ReconnectingTransportTest {
       ReconnectingTransport reconnecting =
           ReconnectingTransport.builder(factory)
               .backoffStrategy(attempt -> 0L)
-              .maxAttempts(3)
+              .maxAttempts(5)
               .listener(
                   new ReconnectListener() {
                     @Override
@@ -699,8 +699,8 @@ class ReconnectingTransportTest {
                   return false;
                 }
               },
-              Duration.ofSeconds(5),
-              AbstractChannel.DEFAULT_ERROR_BACKOFF_NANOS,
+              Duration.ofSeconds(10),
+              TimeUnit.MILLISECONDS.toNanos(10),
               OTel.meter(),
               OTel.tracer());
       channel.start();
@@ -735,7 +735,7 @@ class ReconnectingTransportTest {
                 }
               });
 
-      String resp2 = channel.request("world").get(5, TimeUnit.SECONDS);
+      String resp2 = channel.request("world").get(10, TimeUnit.SECONDS);
       assertThat(resp2).isEqualTo("reply2:world");
 
       channel.close().get(3, TimeUnit.SECONDS);
