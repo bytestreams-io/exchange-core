@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.net.Socket;
 
 /**
- * Configures a {@link Socket} before it is connected.
+ * Configures a {@link Socket}.
  *
  * <p>Use this to set socket options such as timeouts, keep-alive, TCP no-delay, and buffer sizes.
- * Options that must be set before connecting (e.g. {@code SO_RCVBUF}) are safely applied here.
+ * For client sockets, the configurator is called before connecting so that options requiring
+ * pre-connect setup (e.g. {@code SO_RCVBUF}) are safely applied. For accepted server sockets, it is
+ * called after accept.
  */
 @FunctionalInterface
 public interface SocketConfigurator {
@@ -18,7 +20,7 @@ public interface SocketConfigurator {
   /**
    * Configures the given socket.
    *
-   * @param socket the socket to configure (not yet connected)
+   * @param socket the socket to configure
    * @throws IOException if configuration fails
    */
   void configure(Socket socket) throws IOException;
