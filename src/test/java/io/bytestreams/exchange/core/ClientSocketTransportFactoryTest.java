@@ -106,9 +106,8 @@ class ClientSocketTransportFactoryTest {
 
     @Test
     void rejects_null_configurator() {
-      assertThatThrownBy(
-              () ->
-                  ClientSocketTransportFactory.builder("localhost", 8080).socketConfigurator(null))
+      var builder = ClientSocketTransportFactory.builder("localhost", 8080);
+      assertThatThrownBy(() -> builder.socketConfigurator(null))
           .isInstanceOf(NullPointerException.class);
     }
   }
