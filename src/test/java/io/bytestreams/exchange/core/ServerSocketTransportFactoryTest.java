@@ -137,13 +137,13 @@ class ServerSocketTransportFactoryTest {
     }
 
     @Test
-    void rejects_null_host() throws IOException {
+    void rejects_null_host() {
       var builder = ServerSocketTransportFactory.builder(0);
       assertThatThrownBy(() -> builder.host(null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    void rejects_null_configurator() throws IOException {
+    void rejects_null_configurator() {
       var builder = ServerSocketTransportFactory.builder(0);
       assertThatThrownBy(() -> builder.socketConfigurator(null))
           .isInstanceOf(NullPointerException.class);
