@@ -30,4 +30,4 @@ jobs:
         with:
           path: target/reports/apidocs
 
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
