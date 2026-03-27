@@ -86,9 +86,11 @@ public interface BackoffStrategy {
     }
     return attempt -> {
       Duration delay = this.delay(attempt);
-      long jitterNanos =
-          (long) (delay.toNanos() * factor * ThreadLocalRandom.current().nextDouble());
-      return delay.plusNanos(jitterNanos);
+      long jitter = (long) (delay.toNanos() * factor);
+      if (jitter <= 0) {
+        return delay;
+      }
+      return delay.plusNanos(ThreadLocalRandom.current().nextLong(jitter));
     };
   }
 }
