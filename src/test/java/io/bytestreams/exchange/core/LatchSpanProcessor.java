@@ -21,11 +21,9 @@ import java.util.concurrent.TimeUnit;
  */
 class LatchSpanProcessor implements SpanProcessor {
 
-  private final Set<String> spanNames;
   private final java.util.concurrent.ConcurrentHashMap<String, CountDownLatch> latches;
 
   private LatchSpanProcessor(Set<String> spanNames) {
-    this.spanNames = spanNames;
     this.latches = new java.util.concurrent.ConcurrentHashMap<>();
     for (String name : spanNames) {
       latches.put(name, new CountDownLatch(1));
@@ -54,7 +52,9 @@ class LatchSpanProcessor implements SpanProcessor {
   }
 
   @Override
-  public void onStart(Context parentContext, ReadWriteSpan span) {}
+  public void onStart(Context parentContext, ReadWriteSpan span) {
+    // Only onEnd is needed; isStartRequired() returns false
+  }
 
   @Override
   public boolean isStartRequired() {
