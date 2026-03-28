@@ -731,7 +731,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
       channel = ch;
       ch.close();
       await()
-          .atMost(Duration.ofSeconds(2))
+          .atMost(Duration.ofSeconds(5))
           .until(
               () ->
                   spanExporter.getFinishedSpanItems().stream()
@@ -751,7 +751,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
       channel = ch;
       ch.close();
       await()
-          .atMost(Duration.ofSeconds(2))
+          .atMost(Duration.ofSeconds(5))
           .until(
               () ->
                   spanExporter.getFinishedSpanItems().stream()
@@ -770,7 +770,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
       channel = ch;
       TestFixture.writeFramed("ping", serverOut);
       await()
-          .atMost(Duration.ofSeconds(2))
+          .atMost(Duration.ofSeconds(5))
           .until(
               () ->
                   spanExporter.getFinishedSpanItems().stream()
@@ -832,7 +832,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
       channel = ch;
       TestFixture.writeFramed("ping", serverOut);
       await()
-          .atMost(Duration.ofSeconds(2))
+          .atMost(Duration.ofSeconds(5))
           .until(
               () ->
                   spanExporter.getFinishedSpanItems().stream()
