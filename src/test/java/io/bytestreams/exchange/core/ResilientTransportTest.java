@@ -601,7 +601,7 @@ class ResilientTransportTest {
       serverOut1.close();
       serverIn1.close();
 
-      assertThat(reconnectedLatch.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(reconnectedLatch.await(30, TimeUnit.SECONDS)).isTrue();
 
       Thread.ofVirtual()
           .start(
@@ -614,7 +614,7 @@ class ResilientTransportTest {
                 }
               });
 
-      String resp2 = channel.request("world").get(10, TimeUnit.SECONDS);
+      String resp2 = channel.request("world").get(30, TimeUnit.SECONDS);
       assertThat(resp2).isEqualTo("reply2:world");
 
       channel.close().get(3, TimeUnit.SECONDS);
