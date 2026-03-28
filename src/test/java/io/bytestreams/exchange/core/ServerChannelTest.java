@@ -687,14 +687,17 @@ class ServerChannelTest extends AbstractChannelTestBase {
   @Nested
   class Tracing {
     private InMemorySpanExporter spanExporter;
+    private LatchSpanProcessor latchProcessor;
     private SdkTracerProvider tracerProvider;
 
     @BeforeEach
     void setUp() {
       spanExporter = InMemorySpanExporter.create();
+      latchProcessor = LatchSpanProcessor.create("server", "handle");
       tracerProvider =
           SdkTracerProvider.builder()
               .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+              .addSpanProcessor(latchProcessor)
               .build();
     }
 
@@ -726,16 +729,11 @@ class ServerChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void channel_span_created_with_SERVER_kind() {
+    void channel_span_created_with_SERVER_kind() throws Exception {
       var ch = createTracedChannel();
       channel = ch;
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(5))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("server")));
+      latchProcessor.await("server", 5, TimeUnit.SECONDS);
       SpanData span =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("server"))
@@ -746,16 +744,11 @@ class ServerChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void channel_span_ends_ok_on_clean_close() {
+    void channel_span_ends_ok_on_clean_close() throws Exception {
       var ch = createTracedChannel();
       channel = ch;
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(5))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("server")));
+      latchProcessor.await("server", 5, TimeUnit.SECONDS);
       SpanData span =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("server"))
@@ -769,12 +762,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
       var ch = createTracedChannel((req, future) -> future.complete("pong"));
       channel = ch;
       TestFixture.writeFramed("ping", serverOut);
-      await()
-          .atMost(Duration.ofSeconds(5))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("handle")));
+      latchProcessor.await("handle", 5, TimeUnit.SECONDS);
       SpanData handleSpan =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("handle"))
@@ -795,20 +783,11 @@ class ServerChannelTest extends AbstractChannelTestBase {
               });
       channel = ch;
       TestFixture.writeFramed("ping", serverOut);
-      // Wait for handler to be invoked before closing, to avoid a race where close() sets CLOSING
-      // before the read loop VT starts its first iteration, causing it to exit without processing.
-      handlerInvokedLatch.await(2, TimeUnit.SECONDS);
-      // Close the server side so the read loop gets an IOException on the next read.
+      // Wait for handler before closing to avoid close() racing with the first read loop iteration
+      handlerInvokedLatch.await(5, TimeUnit.SECONDS);
       serverOut.close();
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(5))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                          .anyMatch(s -> s.getName().equals("handle"))
-                      && spanExporter.getFinishedSpanItems().stream()
-                          .anyMatch(s -> s.getName().equals("server")));
+      latchProcessor.awaitAll(5, TimeUnit.SECONDS);
       SpanData handleSpan =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("handle"))
@@ -831,12 +810,7 @@ class ServerChannelTest extends AbstractChannelTestBase {
               (req, future) -> future.completeExceptionally(new RuntimeException("handler error")));
       channel = ch;
       TestFixture.writeFramed("ping", serverOut);
-      await()
-          .atMost(Duration.ofSeconds(5))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("handle")));
+      latchProcessor.await("handle", 5, TimeUnit.SECONDS);
       SpanData span =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("handle"))

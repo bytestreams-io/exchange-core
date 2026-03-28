@@ -691,14 +691,17 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
   @Nested
   class Tracing {
     private InMemorySpanExporter spanExporter;
+    private LatchSpanProcessor latchProcessor;
     private SdkTracerProvider tracerProvider;
 
     @BeforeEach
     void setUp() {
       spanExporter = InMemorySpanExporter.create();
+      latchProcessor = LatchSpanProcessor.create("pipelined", "request");
       tracerProvider =
           SdkTracerProvider.builder()
               .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+              .addSpanProcessor(latchProcessor)
               .build();
     }
 
@@ -725,16 +728,11 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void channel_span_created_with_attributes() {
+    void channel_span_created_with_attributes() throws Exception {
       var ch = createTracedChannel();
       channel = ch;
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(2))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("pipelined")));
+      latchProcessor.await("pipelined", 5, TimeUnit.SECONDS);
       SpanData span =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("pipelined"))
@@ -745,16 +743,11 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void channel_span_ends_ok_on_clean_close() {
+    void channel_span_ends_ok_on_clean_close() throws Exception {
       var ch = createTracedChannel();
       channel = ch;
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(2))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("pipelined")));
+      latchProcessor.await("pipelined", 5, TimeUnit.SECONDS);
       SpanData span =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("pipelined"))
@@ -771,14 +764,7 @@ class PipelinedChannelTest extends AbstractChannelTestBase {
       TestFixture.writeFramed("world", serverOut);
       assertThat(future).succeedsWithin(Duration.ofMillis(500));
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(5))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                          .anyMatch(s -> s.getName().equals("request"))
-                      && spanExporter.getFinishedSpanItems().stream()
-                          .anyMatch(s -> s.getName().equals("pipelined")));
+      latchProcessor.awaitAll(5, TimeUnit.SECONDS);
       SpanData requestSpan =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("request"))

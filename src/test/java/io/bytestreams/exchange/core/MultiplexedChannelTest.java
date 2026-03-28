@@ -628,14 +628,17 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
   @Nested
   class Tracing {
     private InMemorySpanExporter spanExporter;
+    private LatchSpanProcessor latchProcessor;
     private SdkTracerProvider tracerProvider;
 
     @BeforeEach
     void setUp() {
       spanExporter = InMemorySpanExporter.create();
+      latchProcessor = LatchSpanProcessor.create("multiplexed", "request");
       tracerProvider =
           SdkTracerProvider.builder()
               .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+              .addSpanProcessor(latchProcessor)
               .build();
     }
 
@@ -674,12 +677,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
       TestFixture.writeFramed("myReqId", serverOut);
       assertThat(future).succeedsWithin(Duration.ofMillis(500));
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(2))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("request")));
+      latchProcessor.await("request", 5, TimeUnit.SECONDS);
       SpanData requestSpan =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("request"))
@@ -696,14 +694,7 @@ class MultiplexedChannelTest extends AbstractChannelTestBase {
       TestFixture.writeFramed("myReqId", serverOut);
       assertThat(future).succeedsWithin(Duration.ofMillis(500));
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(2))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                          .anyMatch(s -> s.getName().equals("request"))
-                      && spanExporter.getFinishedSpanItems().stream()
-                          .anyMatch(s -> s.getName().equals("multiplexed")));
+      latchProcessor.awaitAll(5, TimeUnit.SECONDS);
       SpanData requestSpan =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("request"))

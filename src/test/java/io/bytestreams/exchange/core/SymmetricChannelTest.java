@@ -23,6 +23,7 @@ import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -579,14 +580,17 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
   @Nested
   class Tracing {
     private InMemorySpanExporter spanExporter;
+    private LatchSpanProcessor latchProcessor;
     private SdkTracerProvider tracerProvider;
 
     @BeforeEach
     void setUp() {
       spanExporter = InMemorySpanExporter.create();
+      latchProcessor = LatchSpanProcessor.create("symmetric", "handle");
       tracerProvider =
           SdkTracerProvider.builder()
               .addSpanProcessor(SimpleSpanProcessor.create(spanExporter))
+              .addSpanProcessor(latchProcessor)
               .build();
     }
 
@@ -619,16 +623,11 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
     }
 
     @Test
-    void channel_span_has_INTERNAL_kind() {
+    void channel_span_has_INTERNAL_kind() throws Exception {
       var ch = createTracedChannel();
       channel = ch;
       ch.close();
-      await()
-          .atMost(Duration.ofSeconds(2))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("symmetric")));
+      latchProcessor.await("symmetric", 5, TimeUnit.SECONDS);
       SpanData span =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("symmetric"))
@@ -642,12 +641,7 @@ class SymmetricChannelTest extends AbstractChannelTestBase {
       var ch = createTracedChannel((req, future) -> future.complete("resp"));
       channel = ch;
       TestFixture.writeFramed("inboundMsg", serverOut);
-      await()
-          .atMost(Duration.ofSeconds(2))
-          .until(
-              () ->
-                  spanExporter.getFinishedSpanItems().stream()
-                      .anyMatch(s -> s.getName().equals("handle")));
+      latchProcessor.await("handle", 5, TimeUnit.SECONDS);
       SpanData handleSpan =
           spanExporter.getFinishedSpanItems().stream()
               .filter(s -> s.getName().equals("handle"))
