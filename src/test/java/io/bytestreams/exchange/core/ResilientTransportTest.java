@@ -453,11 +453,24 @@ class ResilientTransportTest {
     @Test
     void concurrent_failures_trigger_single_reconnect() throws Exception {
       Transport t1 = mockTransport();
-      Transport t2 = mockTransport();
-      Transport t3 = mockTransport();
 
-      TransportFactory factory = mock(TransportFactory.class);
-      when(factory.create()).thenReturn(t1).thenReturn(t2).thenReturn(t3);
+      CountDownLatch factoryEntered = new CountDownLatch(1);
+      CountDownLatch factoryProceed = new CountDownLatch(1);
+      AtomicInteger createCalls = new AtomicInteger();
+
+      TransportFactory factory =
+          () -> {
+            int c = createCalls.incrementAndGet();
+            if (c == 1) return t1;
+            // Second create: signal we're inside, then wait so the other thread queues up
+            factoryEntered.countDown();
+            try {
+              factoryProceed.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+            return mockTransport();
+          };
 
       ResilientTransport transport =
           ResilientTransport.builder(factory)
@@ -468,13 +481,11 @@ class ResilientTransportTest {
       transport.inputStream();
       transport.markStale(new IOException("connection lost"));
 
-      CountDownLatch startLatch = new CountDownLatch(1);
       CountDownLatch doneLatch = new CountDownLatch(2);
 
       Runnable task =
           () -> {
             try {
-              startLatch.await();
               transport.inputStream();
             } catch (Exception e) {
               // ignore
@@ -483,12 +494,20 @@ class ResilientTransportTest {
             }
           };
 
+      // Thread 1 enters reconnect, blocks in factory
       Thread.ofVirtual().start(task);
+      factoryEntered.await(5, TimeUnit.SECONDS);
+
+      // Thread 2 will queue on the lock, then hit the double-check (stale=false)
       Thread.ofVirtual().start(task);
-      startLatch.countDown();
+      Thread.sleep(50);
+
+      // Let thread 1 finish
+      factoryProceed.countDown();
       doneLatch.await(5, TimeUnit.SECONDS);
 
-      verify(factory, times(2)).create();
+      // Only 2 factory calls: initial + one reconnect (thread 2 got the double-check path)
+      assertThat(createCalls.get()).isEqualTo(2);
     }
   }
 
