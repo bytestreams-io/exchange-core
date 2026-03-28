@@ -528,18 +528,22 @@ class ResilientTransportTest {
 
       Transport t1 =
           new Transport() {
+            @Override
             public InputStream inputStream() {
               return clientIn1;
             }
 
+            @Override
             public OutputStream outputStream() {
               return clientOut1;
             }
 
+            @Override
             public Attributes attributes() {
               return Attributes.empty();
             }
 
+            @Override
             public void close() throws IOException {
               clientIn1.close();
               clientOut1.close();
@@ -547,18 +551,22 @@ class ResilientTransportTest {
           };
       Transport t2 =
           new Transport() {
+            @Override
             public InputStream inputStream() {
               return clientIn2;
             }
 
+            @Override
             public OutputStream outputStream() {
               return clientOut2;
             }
 
+            @Override
             public Attributes attributes() {
               return Attributes.empty();
             }
 
+            @Override
             public void close() throws IOException {
               clientIn2.close();
               clientOut2.close();
