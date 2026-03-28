@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
@@ -39,10 +40,10 @@ public final class ResilientTransport implements Transport {
   private final ReentrantLock reconnectLock = new ReentrantLock();
   private final AtomicBoolean stale = new AtomicBoolean(true);
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile Transport delegate;
-  private volatile Throwable staleCause;
-  private volatile InputStream cachedIn;
-  private volatile OutputStream cachedOut;
+  private final AtomicReference<Transport> delegate = new AtomicReference<>();
+  private final AtomicReference<Throwable> staleCause = new AtomicReference<>();
+  private final AtomicReference<InputStream> cachedIn = new AtomicReference<>();
+  private final AtomicReference<OutputStream> cachedOut = new AtomicReference<>();
 
   private ResilientTransport(
       TransportFactory factory, BackoffStrategy backoffStrategy, int maxAttempts) {
@@ -57,7 +58,7 @@ public final class ResilientTransport implements Transport {
 
   @Override
   public InputStream inputStream() throws IOException {
-    InputStream in = cachedIn;
+    InputStream in = cachedIn.get();
     if (in != null && !stale.get()) {
       return in;
     }
@@ -67,13 +68,13 @@ public final class ResilientTransport implements Transport {
       markStale(e);
       in = new ReconnectingInputStream(getOrReconnect().inputStream());
     }
-    cachedIn = in;
+    cachedIn.set(in);
     return in;
   }
 
   @Override
   public OutputStream outputStream() throws IOException {
-    OutputStream out = cachedOut;
+    OutputStream out = cachedOut.get();
     if (out != null && !stale.get()) {
       return out;
     }
@@ -83,13 +84,13 @@ public final class ResilientTransport implements Transport {
       markStale(e);
       out = new ReconnectingOutputStream(getOrReconnect().outputStream());
     }
-    cachedOut = out;
+    cachedOut.set(out);
     return out;
   }
 
   @Override
   public Attributes attributes() {
-    Transport d = delegate;
+    Transport d = delegate.get();
     return d != null ? d.attributes() : Attributes.empty();
   }
 
@@ -98,7 +99,7 @@ public final class ResilientTransport implements Transport {
     reconnectLock.lock();
     try {
       closed.set(true);
-      Transport d = delegate;
+      Transport d = delegate.get();
       if (d != null) {
         d.close();
       }
@@ -108,7 +109,7 @@ public final class ResilientTransport implements Transport {
   }
 
   void markStale(Throwable cause) {
-    staleCause = cause;
+    staleCause.set(cause);
     stale.set(true);
   }
 
@@ -117,7 +118,7 @@ public final class ResilientTransport implements Transport {
       throw new IOException("Transport is closed");
     }
     if (!stale.get()) {
-      return delegate;
+      return delegate.get();
     }
     return reconnect();
   }
@@ -132,15 +133,14 @@ public final class ResilientTransport implements Transport {
     reconnectLock.lock();
     try {
       if (!stale.get()) {
-        return delegate;
+        return delegate.get();
       }
 
-      Throwable lastCause = staleCause;
-      staleCause = null;
-      boolean initialConnect = delegate == null;
+      Throwable lastCause = staleCause.getAndSet(null);
+      boolean initialConnect = delegate.get() == null;
       if (!initialConnect) {
         log.warn("Transport connection lost, attempting reconnect");
-        Closeables.closeQuietly(delegate);
+        Closeables.closeQuietly(delegate.get());
       }
 
       for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -149,12 +149,12 @@ public final class ResilientTransport implements Transport {
         log.info("Reconnect attempt {}/{}", attempt, maxAttempts);
 
         try {
-          delegate = factory.create();
-          cachedIn = null;
-          cachedOut = null;
+          delegate.set(factory.create());
+          cachedIn.set(null);
+          cachedOut.set(null);
           stale.set(false);
           log.info("Reconnected successfully on attempt {}", attempt);
-          return delegate;
+          return delegate.get();
         } catch (IOException e) {
           lastCause = e;
           log.debug("Reconnect attempt {} failed: {}", attempt, e.getMessage());

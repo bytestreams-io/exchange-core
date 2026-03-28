@@ -434,17 +434,16 @@ class ResilientTransportTest {
 
     @Test
     void rejects_zero_max_attempts() {
-      assertThatThrownBy(
-              () -> ResilientTransport.builder(() -> mock(Transport.class)).maxAttempts(0).build())
+      var builder = ResilientTransport.builder(() -> mock(Transport.class)).maxAttempts(0);
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("maxAttempts must be positive");
     }
 
     @Test
     void rejects_negative_max_attempts() {
-      assertThatThrownBy(
-              () -> ResilientTransport.builder(() -> mock(Transport.class)).maxAttempts(-1).build())
-          .isInstanceOf(IllegalArgumentException.class);
+      var builder = ResilientTransport.builder(() -> mock(Transport.class)).maxAttempts(-1);
+      assertThatThrownBy(builder::build).isInstanceOf(IllegalArgumentException.class);
     }
   }
 
