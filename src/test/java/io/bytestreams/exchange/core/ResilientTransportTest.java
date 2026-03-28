@@ -498,9 +498,8 @@ class ResilientTransportTest {
       Thread.ofVirtual().start(task);
       factoryEntered.await(5, TimeUnit.SECONDS);
 
-      // Thread 2 will queue on the lock, then hit the double-check (stale=false)
+      // Thread 2 queues on the lock, then hits the double-check (stale=false)
       Thread.ofVirtual().start(task);
-      Thread.sleep(50);
 
       // Let thread 1 finish
       factoryProceed.countDown();
