@@ -534,7 +534,6 @@ class ResilientTransportTest {
       Transport t1 = mockTransport();
 
       CountDownLatch factoryEntered = new CountDownLatch(1);
-      CountDownLatch factoryProceed = new CountDownLatch(1);
       CountDownLatch thread2Queued = new CountDownLatch(1);
       AtomicInteger createCalls = new AtomicInteger();
 
