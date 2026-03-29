@@ -535,16 +535,17 @@ class ResilientTransportTest {
 
       CountDownLatch factoryEntered = new CountDownLatch(1);
       CountDownLatch factoryProceed = new CountDownLatch(1);
+      CountDownLatch thread2Queued = new CountDownLatch(1);
       AtomicInteger createCalls = new AtomicInteger();
 
       TransportFactory factory =
           () -> {
             int c = createCalls.incrementAndGet();
             if (c == 1) return t1;
-            // Second create: signal we're inside, then wait so the other thread queues up
+            // Second create: signal entry, wait for thread 2 to queue on the lock
             factoryEntered.countDown();
             try {
-              factoryProceed.await(5, TimeUnit.SECONDS);
+              thread2Queued.await(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
               Thread.currentThread().interrupt();
             }
@@ -577,14 +578,18 @@ class ResilientTransportTest {
       Thread.ofVirtual().start(task);
       factoryEntered.await(5, TimeUnit.SECONDS);
 
-      // Thread 2 queues on the lock, then hits the double-check (stale=false)
-      Thread.ofVirtual().start(task);
+      // Thread 2 will see stale=true in getOrReconnect() and block on reconnectLock
+      Thread thread2 = Thread.ofVirtual().start(task);
 
-      // Let thread 1 finish
-      factoryProceed.countDown();
+      // Wait until thread 2 is blocked on the lock
+      while (thread2.getState() != Thread.State.WAITING) {
+        Thread.onSpinWait();
+      }
+      thread2Queued.countDown();
+
       doneLatch.await(5, TimeUnit.SECONDS);
 
-      // Only 2 factory calls: initial + one reconnect (thread 2 got the double-check path)
+      // Only 2 factory calls: initial + one reconnect (thread 2 hit the double-check)
       assertThat(createCalls.get()).isEqualTo(2);
     }
   }
