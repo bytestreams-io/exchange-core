@@ -37,6 +37,7 @@ public final class OTel {
       AttributeKey.longKey("network.peer.port");
   public static final double NANOS_PER_MS = 1_000_000.0;
   public static final String NAMESPACE = "io.bytestreams";
+  public static final String UNIT_ATTEMPT = "{attempt}";
   public static final String UNIT_REQUEST = "{request}";
 
   private OTel() {}

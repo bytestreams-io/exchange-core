@@ -56,11 +56,11 @@ public final class ResilientTransport implements Transport {
     this.backoffStrategy = backoffStrategy;
     this.maxAttempts = maxAttempts;
     this.reconnectTotal =
-        meter.counterBuilder("transport.reconnect.total").setUnit("{attempt}").build();
+        meter.counterBuilder("transport.reconnect.total").setUnit(OTel.UNIT_ATTEMPT).build();
     this.reconnectSuccess =
-        meter.counterBuilder("transport.reconnect.success").setUnit("{attempt}").build();
+        meter.counterBuilder("transport.reconnect.success").setUnit(OTel.UNIT_ATTEMPT).build();
     this.reconnectGaveUp =
-        meter.counterBuilder("transport.reconnect.gave_up").setUnit("{attempt}").build();
+        meter.counterBuilder("transport.reconnect.gave_up").setUnit(OTel.UNIT_ATTEMPT).build();
   }
 
   public static Builder builder(TransportFactory factory) {
