@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -20,6 +23,8 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -420,6 +425,80 @@ class ResilientTransportTest {
           .hasMessageContaining("closed");
 
       verify(factory, times(0)).create();
+    }
+  }
+
+  @Nested
+  class Metrics {
+
+    private InMemoryMetricReader metricReader;
+    private SdkMeterProvider meterProvider;
+
+    @BeforeEach
+    void setUp() {
+      metricReader = InMemoryMetricReader.create();
+      meterProvider = SdkMeterProvider.builder().registerMetricReader(metricReader).build();
+    }
+
+    @AfterEach
+    void tearDown() {
+      meterProvider.close();
+    }
+
+    @Test
+    void records_reconnect_total_and_success() throws IOException {
+      Meter meter = meterProvider.get("test");
+
+      Transport t1 = mockTransport();
+      Transport t2 = mockTransport();
+
+      TransportFactory factory = mock(TransportFactory.class);
+      when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+      ResilientTransport transport =
+          ResilientTransport.builder(factory)
+              .backoffStrategy(BackoffStrategy.fixed(Duration.ZERO))
+              .maxAttempts(3)
+              .meter(meter)
+              .build();
+
+      transport.inputStream();
+      transport.markStale(new IOException("connection lost"));
+      transport.inputStream();
+
+      TestFixture.assertLongSum(metricReader, "transport.reconnect.total", 2);
+      TestFixture.assertLongSum(metricReader, "transport.reconnect.success", 2);
+    }
+
+    @Test
+    void records_gave_up() throws IOException {
+      Meter meter = meterProvider.get("test");
+
+      Transport initial = mockTransport();
+
+      TransportFactory factory = mock(TransportFactory.class);
+      when(factory.create())
+          .thenReturn(initial)
+          .thenThrow(new IOException("fail1"))
+          .thenThrow(new IOException("fail2"));
+
+      ResilientTransport transport =
+          ResilientTransport.builder(factory)
+              .backoffStrategy(BackoffStrategy.fixed(Duration.ZERO))
+              .maxAttempts(2)
+              .meter(meter)
+              .build();
+
+      transport.inputStream();
+      transport.markStale(new IOException("connection lost"));
+      try {
+        transport.inputStream();
+      } catch (IOException e) {
+        // expected
+      }
+
+      // inputStream() retries once on failure, so gave_up fires for each reconnect cycle
+      TestFixture.assertLongSum(metricReader, "transport.reconnect.gave_up", 2);
     }
   }
 

@@ -1,6 +1,8 @@
 package io.bytestreams.exchange.core;
 
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.LongCounter;
+import io.opentelemetry.api.metrics.Meter;
 import java.io.FilterInputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -37,6 +39,9 @@ public final class ResilientTransport implements Transport {
   private final TransportFactory factory;
   private final BackoffStrategy backoffStrategy;
   private final int maxAttempts;
+  private final LongCounter reconnectTotal;
+  private final LongCounter reconnectSuccess;
+  private final LongCounter reconnectGaveUp;
   private final ReentrantLock reconnectLock = new ReentrantLock();
   private final AtomicBoolean stale = new AtomicBoolean(true);
   private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -46,10 +51,16 @@ public final class ResilientTransport implements Transport {
   private final AtomicReference<OutputStream> cachedOut = new AtomicReference<>();
 
   private ResilientTransport(
-      TransportFactory factory, BackoffStrategy backoffStrategy, int maxAttempts) {
+      TransportFactory factory, BackoffStrategy backoffStrategy, int maxAttempts, Meter meter) {
     this.factory = factory;
     this.backoffStrategy = backoffStrategy;
     this.maxAttempts = maxAttempts;
+    this.reconnectTotal =
+        meter.counterBuilder("transport.reconnect.total").setUnit("{attempt}").build();
+    this.reconnectSuccess =
+        meter.counterBuilder("transport.reconnect.success").setUnit("{attempt}").build();
+    this.reconnectGaveUp =
+        meter.counterBuilder("transport.reconnect.gave_up").setUnit("{attempt}").build();
   }
 
   public static Builder builder(TransportFactory factory) {
@@ -146,6 +157,7 @@ public final class ResilientTransport implements Transport {
       for (int attempt = 1; attempt <= maxAttempts; attempt++) {
         checkAborted();
 
+        reconnectTotal.add(1, Attributes.empty());
         log.info("Reconnect attempt {}/{}", attempt, maxAttempts);
 
         try {
@@ -153,6 +165,7 @@ public final class ResilientTransport implements Transport {
           cachedIn.set(null);
           cachedOut.set(null);
           stale.set(false);
+          reconnectSuccess.add(1, Attributes.empty());
           log.info("Reconnected successfully on attempt {}", attempt);
           return delegate.get();
         } catch (IOException e) {
@@ -165,6 +178,7 @@ public final class ResilientTransport implements Transport {
         }
       }
 
+      reconnectGaveUp.add(1, Attributes.empty());
       log.error("Reconnect gave up after {} attempts", maxAttempts);
       throw new IOException("Failed to reconnect after " + maxAttempts + " attempts", lastCause);
     } finally {
@@ -179,9 +193,11 @@ public final class ResilientTransport implements Transport {
             .withMax(Duration.ofSeconds(30))
             .withJitter(0.5);
     private int maxAttempts = Integer.MAX_VALUE;
+    private Meter meter;
 
     private Builder(TransportFactory factory) {
       this.factory = factory;
+      this.meter = OTel.meter();
     }
 
     public Builder backoffStrategy(BackoffStrategy backoffStrategy) {
@@ -194,11 +210,16 @@ public final class ResilientTransport implements Transport {
       return this;
     }
 
+    public Builder meter(Meter meter) {
+      this.meter = Objects.requireNonNull(meter, "meter");
+      return this;
+    }
+
     public ResilientTransport build() {
       if (maxAttempts <= 0) {
         throw new IllegalArgumentException("maxAttempts must be positive");
       }
-      return new ResilientTransport(factory, backoffStrategy, maxAttempts);
+      return new ResilientTransport(factory, backoffStrategy, maxAttempts, meter);
     }
   }
 
