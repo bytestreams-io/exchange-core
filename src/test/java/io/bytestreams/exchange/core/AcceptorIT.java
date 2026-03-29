@@ -11,16 +11,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
-class SocketAcceptorIT {
+class AcceptorIT {
 
   @Test
   void acceptorCreatesChannelAndHandlesRequest() throws Exception {
     CountDownLatch channelCreated = new CountDownLatch(1);
     CompletableFuture<String> receivedRequest = new CompletableFuture<>();
 
-    SocketAcceptor acceptor =
-        SocketAcceptor.builder()
-            .port(0)
+    ServerSocketTransportFactory transportFactory = ServerSocketTransportFactory.builder(0).build();
+
+    Acceptor acceptor =
+        Acceptor.builder(transportFactory)
             .channelFactory(
                 transport -> {
                   ServerChannel<String, String> channel =
@@ -40,7 +41,7 @@ class SocketAcceptorIT {
             .build();
     acceptor.start();
 
-    Socket clientSocket = new Socket("localhost", acceptor.port());
+    Socket clientSocket = new Socket("localhost", transportFactory.port());
     PipelinedChannel<String, String> client =
         PipelinedChannel.<String, String>builder()
             .transport(new SocketTransport(clientSocket))
