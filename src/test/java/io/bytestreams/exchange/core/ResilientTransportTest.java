@@ -662,11 +662,8 @@ class ResilientTransportTest {
           () -> {
             int c = callCount.incrementAndGet();
             if (c == 1) return t1;
-            if (c == 2) {
-              reconnectedLatch.countDown();
-              return t2;
-            }
-            throw new IOException("no more transports");
+            reconnectedLatch.countDown();
+            return t2;
           };
 
       ResilientTransport resilient =
