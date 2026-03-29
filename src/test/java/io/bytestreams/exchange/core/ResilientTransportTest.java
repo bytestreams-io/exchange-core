@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -20,6 +23,8 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -424,6 +429,80 @@ class ResilientTransportTest {
   }
 
   @Nested
+  class Metrics {
+
+    private InMemoryMetricReader metricReader;
+    private SdkMeterProvider meterProvider;
+
+    @BeforeEach
+    void setUp() {
+      metricReader = InMemoryMetricReader.create();
+      meterProvider = SdkMeterProvider.builder().registerMetricReader(metricReader).build();
+    }
+
+    @AfterEach
+    void tearDown() {
+      meterProvider.close();
+    }
+
+    @Test
+    void records_reconnect_total_and_success() throws IOException {
+      Meter meter = meterProvider.get("test");
+
+      Transport t1 = mockTransport();
+      Transport t2 = mockTransport();
+
+      TransportFactory factory = mock(TransportFactory.class);
+      when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+      ResilientTransport transport =
+          ResilientTransport.builder(factory)
+              .backoffStrategy(BackoffStrategy.fixed(Duration.ZERO))
+              .maxAttempts(3)
+              .meter(meter)
+              .build();
+
+      transport.inputStream();
+      transport.markStale(new IOException("connection lost"));
+      transport.inputStream();
+
+      TestFixture.assertLongSum(metricReader, "transport.reconnect.total", 2);
+      TestFixture.assertLongSum(metricReader, "transport.reconnect.success", 2);
+    }
+
+    @Test
+    void records_gave_up() throws IOException {
+      Meter meter = meterProvider.get("test");
+
+      Transport initial = mockTransport();
+
+      TransportFactory factory = mock(TransportFactory.class);
+      when(factory.create())
+          .thenReturn(initial)
+          .thenThrow(new IOException("fail1"))
+          .thenThrow(new IOException("fail2"));
+
+      ResilientTransport transport =
+          ResilientTransport.builder(factory)
+              .backoffStrategy(BackoffStrategy.fixed(Duration.ZERO))
+              .maxAttempts(2)
+              .meter(meter)
+              .build();
+
+      transport.inputStream();
+      transport.markStale(new IOException("connection lost"));
+      try {
+        transport.inputStream();
+      } catch (IOException e) {
+        // expected
+      }
+
+      // inputStream() retries once on failure, so gave_up fires for each reconnect cycle
+      TestFixture.assertLongSum(metricReader, "transport.reconnect.gave_up", 2);
+    }
+  }
+
+  @Nested
   class BuilderValidation {
 
     @Test
@@ -455,17 +534,17 @@ class ResilientTransportTest {
       Transport t1 = mockTransport();
 
       CountDownLatch factoryEntered = new CountDownLatch(1);
-      CountDownLatch factoryProceed = new CountDownLatch(1);
+      CountDownLatch thread2Queued = new CountDownLatch(1);
       AtomicInteger createCalls = new AtomicInteger();
 
       TransportFactory factory =
           () -> {
             int c = createCalls.incrementAndGet();
             if (c == 1) return t1;
-            // Second create: signal we're inside, then wait so the other thread queues up
+            // Second create: signal entry, wait for thread 2 to queue on the lock
             factoryEntered.countDown();
             try {
-              factoryProceed.await(5, TimeUnit.SECONDS);
+              thread2Queued.await(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
               Thread.currentThread().interrupt();
             }
@@ -498,14 +577,18 @@ class ResilientTransportTest {
       Thread.ofVirtual().start(task);
       factoryEntered.await(5, TimeUnit.SECONDS);
 
-      // Thread 2 queues on the lock, then hits the double-check (stale=false)
-      Thread.ofVirtual().start(task);
+      // Thread 2 will see stale=true in getOrReconnect() and block on reconnectLock
+      Thread thread2 = Thread.ofVirtual().start(task);
 
-      // Let thread 1 finish
-      factoryProceed.countDown();
+      // Wait until thread 2 is blocked on the lock
+      while (thread2.getState() != Thread.State.WAITING) {
+        Thread.onSpinWait();
+      }
+      thread2Queued.countDown();
+
       doneLatch.await(5, TimeUnit.SECONDS);
 
-      // Only 2 factory calls: initial + one reconnect (thread 2 got the double-check path)
+      // Only 2 factory calls: initial + one reconnect (thread 2 hit the double-check)
       assertThat(createCalls.get()).isEqualTo(2);
     }
   }
@@ -578,11 +661,8 @@ class ResilientTransportTest {
           () -> {
             int c = callCount.incrementAndGet();
             if (c == 1) return t1;
-            if (c == 2) {
-              reconnectedLatch.countDown();
-              return t2;
-            }
-            throw new IOException("no more transports");
+            reconnectedLatch.countDown();
+            return t2;
           };
 
       ResilientTransport resilient =
