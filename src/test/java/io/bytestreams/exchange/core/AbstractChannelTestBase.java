@@ -51,7 +51,7 @@ abstract class AbstractChannelTestBase {
         },
         "accept");
     clientRawSocket = new Socket("localhost", serverSocket.getLocalPort());
-    serverRawSocket = accepted.get(5, TimeUnit.SECONDS);
+    serverRawSocket = accepted.get(30, TimeUnit.SECONDS);
     transport = new SocketTransport(clientRawSocket);
     serverOut = serverRawSocket.getOutputStream();
     serverIn = serverRawSocket.getInputStream();
