@@ -59,7 +59,7 @@ class AcceptorTest {
   }
 
   @Nested
-  class accept_loop {
+  class AcceptLoop {
 
     @Test
     void accepts_connections_and_creates_channels() throws Exception {
@@ -379,10 +379,32 @@ class AcceptorTest {
           .atMost(Duration.ofSeconds(2))
           .untilAsserted(() -> assertThat(acceptor.closeFuture()).isDone());
     }
+
+    @Test
+    void double_start_throws() {
+      BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
+
+      Acceptor acceptor =
+          Acceptor.builder(factory)
+              .channelFactory(
+                  s -> {
+                    Channel ch = mock(Channel.class);
+                    when(ch.id()).thenReturn("ch");
+                    when(ch.closeFuture()).thenReturn(new CompletableFuture<>());
+                    when(ch.close()).thenReturn(CompletableFuture.completedFuture(null));
+                    return ch;
+                  })
+              .build();
+      acceptor.start();
+      assertThatThrownBy(acceptor::start)
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("already started");
+      acceptor.close().join();
+    }
   }
 
   @Nested
-  class close {
+  class Close {
 
     @Test
     void close_stops_accepting_and_completes_close_future() throws Exception {
@@ -522,29 +544,7 @@ class AcceptorTest {
   }
 
   @Nested
-  class builder {
-
-    @Test
-    void double_start_throws() {
-      BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
-
-      Acceptor acceptor =
-          Acceptor.builder(factory)
-              .channelFactory(
-                  s -> {
-                    Channel ch = mock(Channel.class);
-                    when(ch.id()).thenReturn("ch");
-                    when(ch.closeFuture()).thenReturn(new CompletableFuture<>());
-                    when(ch.close()).thenReturn(CompletableFuture.completedFuture(null));
-                    return ch;
-                  })
-              .build();
-      acceptor.start();
-      assertThatThrownBy(acceptor::start)
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("already started");
-      acceptor.close().join();
-    }
+  class BuilderValidation {
 
     @Test
     void builder_validates_missing_channel_factory() {

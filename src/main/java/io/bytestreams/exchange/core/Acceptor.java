@@ -158,6 +158,9 @@ public class Acceptor {
   }
 
   private void closeAllChannels() {
+    if (closeFuture.isDone()) {
+      return;
+    }
     CompletableFuture<?>[] futures =
         channels.values().stream().map(Channel::close).toArray(CompletableFuture[]::new);
     CompletableFuture.allOf(futures).whenComplete((v, e) -> closeFuture.complete(null));
