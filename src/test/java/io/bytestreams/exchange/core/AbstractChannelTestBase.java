@@ -41,15 +41,16 @@ abstract class AbstractChannelTestBase {
   void baseSetUp() throws Exception {
     serverSocket = new ServerSocket(0);
     var accepted = new CompletableFuture<Socket>();
-    VT.start(
-        () -> {
-          try {
-            accepted.complete(serverSocket.accept());
-          } catch (IOException e) {
-            accepted.completeExceptionally(e);
-          }
-        },
-        "accept");
+    Thread.ofPlatform()
+        .name("test-accept")
+        .start(
+            () -> {
+              try {
+                accepted.complete(serverSocket.accept());
+              } catch (IOException e) {
+                accepted.completeExceptionally(e);
+              }
+            });
     clientRawSocket = new Socket("localhost", serverSocket.getLocalPort());
     serverRawSocket = accepted.get(30, TimeUnit.SECONDS);
     transport = new SocketTransport(clientRawSocket);
