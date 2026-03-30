@@ -161,8 +161,7 @@ class AcceptorTest {
     @Test
     void non_closeable_factory_skips_close_in_finally() throws Exception {
       // Uses a plain TransportFactory (not Closeable) and an Error to force the
-      // finally block's compareAndSet to succeed, covering the false branch of
-      // `if (transportFactory instanceof Closeable c)` in the finally block.
+      // finally block's compareAndSet to succeed, covering the non-Closeable branch.
       CountDownLatch errorThrown = new CountDownLatch(1);
       CountDownLatch vtDead = new CountDownLatch(1);
 
@@ -242,16 +241,9 @@ class AcceptorTest {
               firstCreated.countDown();
               return stubTransport();
             }
-            // Block until closed, then throw IOException (simulates ServerSocket.accept()
-            // throwing after the socket is closed)
-            while (true) {
-              try {
-                Thread.sleep(20);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              }
-              throw new IOException("socket closed");
-            }
+            // Throw immediately to simulate ServerSocket.accept() throwing after the socket
+            // is closed
+            throw new IOException("socket closed");
           };
 
       Function<Transport, Channel> channelFactory =
@@ -427,7 +419,7 @@ class AcceptorTest {
     }
 
     @Test
-    void double_close_is_idempotent() throws Exception {
+    void double_close_is_idempotent() {
       BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
 
       Function<Transport, Channel> channelFactory =
@@ -451,7 +443,7 @@ class AcceptorTest {
     }
 
     @Test
-    void close_with_no_channels_completes_immediately() throws Exception {
+    void close_with_no_channels_completes_immediately() {
       BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
 
       Acceptor acceptor =
@@ -472,7 +464,7 @@ class AcceptorTest {
     }
 
     @Test
-    void close_future_is_read_only() throws Exception {
+    void close_future_is_read_only() {
       BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
 
       Acceptor acceptor =
@@ -533,7 +525,7 @@ class AcceptorTest {
   class builder {
 
     @Test
-    void double_start_throws() throws Exception {
+    void double_start_throws() {
       BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
 
       Acceptor acceptor =
@@ -589,7 +581,7 @@ class AcceptorTest {
     }
 
     @Test
-    void builder_setters_work_correctly() throws Exception {
+    void builder_setters_work_correctly() {
       BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
 
       Acceptor acceptor =
@@ -608,6 +600,7 @@ class AcceptorTest {
               .build();
       acceptor.start();
       acceptor.close().join();
+      assertThat(acceptor.closeFuture()).isDone();
     }
   }
 }

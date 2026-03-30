@@ -106,53 +106,54 @@ public class Acceptor {
         meter.upDownCounterBuilder("acceptor.connections.active").setUnit("{connection}").build();
     try {
       while (!closed.get()) {
-        Transport transport = null;
-        try {
-          transport = transportFactory.create();
-          if (closed.get()) {
-            Closeables.closeQuietly(transport);
-            break;
-          }
-          Attributes attrs = transport.attributes();
-          Channel channel = channelFactory.apply(transport);
-          channel.start();
-          channels.put(channel.id(), channel);
-          activeConnections.add(1, attrs);
-          log.info("Connection accepted: channelId={}", channel.id());
-          channel
-              .closeFuture()
-              .whenComplete(
-                  (v, e) -> {
-                    channels.remove(channel.id());
-                    activeConnections.add(-1, attrs);
-                  });
-          if (closed.get()) {
-            channel.close();
-          }
-        } catch (IOException e) {
-          if (closed.get()) {
-            break;
-          }
-          log.warn("Accept loop error, retrying after backoff", e);
-          acceptorSpan.recordException(e);
-          LockSupport.parkNanos(errorBackoffNanos);
-        } catch (Exception factoryError) {
-          log.warn("Channel factory error", factoryError);
-          acceptorSpan.recordException(factoryError);
-          if (transport != null) {
-            Closeables.closeQuietly(transport);
-          }
-        }
+        acceptOne(acceptorSpan, activeConnections);
       }
     } finally {
-      if (closed.compareAndSet(false, true)) {
-        if (transportFactory instanceof Closeable c) {
-          Closeables.closeQuietly(c);
-        }
+      if (closed.compareAndSet(false, true) && transportFactory instanceof Closeable c) {
+        Closeables.closeQuietly(c);
       }
       closeAllChannels();
       OTel.endSpan(acceptorSpan, null);
       MDC.clear();
+    }
+  }
+
+  private void acceptOne(Span acceptorSpan, LongUpDownCounter activeConnections) {
+    Transport transport = null;
+    try {
+      transport = transportFactory.create();
+      if (closed.get()) {
+        Closeables.closeQuietly(transport);
+        return;
+      }
+      Attributes attrs = transport.attributes();
+      Channel channel = channelFactory.apply(transport);
+      channel.start();
+      channels.put(channel.id(), channel);
+      activeConnections.add(1, attrs);
+      log.info("Connection accepted: channelId={}", channel.id());
+      channel
+          .closeFuture()
+          .whenComplete(
+              (v, e) -> {
+                channels.remove(channel.id());
+                activeConnections.add(-1, attrs);
+              });
+      if (closed.get()) {
+        channel.close();
+      }
+    } catch (IOException e) {
+      if (!closed.get()) {
+        log.warn("Accept loop error, retrying after backoff", e);
+        acceptorSpan.recordException(e);
+        LockSupport.parkNanos(errorBackoffNanos);
+      }
+    } catch (Exception factoryError) {
+      log.warn("Channel factory error", factoryError);
+      acceptorSpan.recordException(factoryError);
+      if (transport != null) {
+        Closeables.closeQuietly(transport);
+      }
     }
   }
 
