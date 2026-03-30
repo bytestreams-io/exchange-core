@@ -274,16 +274,31 @@ class AcceptorTest {
 
     @Test
     void closed_after_accept_returns_closes_transport_and_breaks() throws Exception {
-      BlockingQueueTransportFactory factory = new BlockingQueueTransportFactory();
       CountDownLatch firstAccepted = new CountDownLatch(1);
-      AtomicInteger callCount = new AtomicInteger();
+      CountDownLatch secondCreateEntered = new CountDownLatch(1);
+      CountDownLatch proceedAfterClose = new CountDownLatch(1);
+      AtomicInteger createCount = new AtomicInteger();
+
+      // Factory blocks on second create() until we set closed and signal it
+      TransportFactory factory =
+          () -> {
+            int n = createCount.incrementAndGet();
+            if (n >= 2) {
+              secondCreateEntered.countDown();
+              try {
+                proceedAfterClose.await(5, TimeUnit.SECONDS);
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            }
+            return stubTransport();
+          };
 
       Function<Transport, Channel> channelFactory =
           transport -> {
-            int n = callCount.incrementAndGet();
             firstAccepted.countDown();
             Channel channel = mock(Channel.class);
-            when(channel.id()).thenReturn("ch-" + n);
+            when(channel.id()).thenReturn("ch-" + createCount.get());
             CompletableFuture<Void> cf = new CompletableFuture<>();
             when(channel.closeFuture()).thenReturn(cf);
             when(channel.close())
@@ -298,17 +313,15 @@ class AcceptorTest {
       Acceptor acceptor = Acceptor.builder(factory).channelFactory(channelFactory).build();
       acceptor.start();
 
-      // First transport — confirms the accept loop is running
-      factory.queue.put(stubTransport());
       firstAccepted.await(2, TimeUnit.SECONDS);
 
-      // Set closed=true WITHOUT closing the transport factory
+      // Wait for second create() to block inside the factory
+      secondCreateEntered.await(2, TimeUnit.SECONDS);
+
+      // Set closed while factory is blocked — when it returns, L125 sees closed=true
       acceptor.closed.set(true);
+      proceedAfterClose.countDown();
 
-      // Now offer another transport — create() returns it, but closed.get() is true
-      factory.queue.put(stubTransport());
-
-      // The loop should break, finally block runs
       await()
           .atMost(Duration.ofSeconds(2))
           .untilAsserted(() -> assertThat(acceptor.closeFuture()).isDone());
