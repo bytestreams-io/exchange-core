@@ -18,7 +18,6 @@ import java.net.Socket;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,18 +39,9 @@ abstract class AbstractChannelTestBase {
   @BeforeEach
   void baseSetUp() throws Exception {
     serverSocket = new ServerSocket(0);
-    var accepted = new CompletableFuture<Socket>();
-    VT.start(
-        () -> {
-          try {
-            accepted.complete(serverSocket.accept());
-          } catch (IOException e) {
-            accepted.completeExceptionally(e);
-          }
-        },
-        "accept");
+    serverSocket.setSoTimeout(30_000);
     clientRawSocket = new Socket("localhost", serverSocket.getLocalPort());
-    serverRawSocket = accepted.get(30, TimeUnit.SECONDS);
+    serverRawSocket = serverSocket.accept();
     transport = new SocketTransport(clientRawSocket);
     serverOut = serverRawSocket.getOutputStream();
     serverIn = serverRawSocket.getInputStream();
