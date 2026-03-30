@@ -129,26 +129,76 @@ CompletableFuture<Message> reply = channel.request(new Message("1", "hello"));
 // Inbound requests from the remote peer are dispatched to the requestHandler
 ```
 
-### TCP server with SocketAcceptor
+### TCP server with Acceptor
 
 Accept multiple client connections and create a channel per connection:
 
 ```java
-SocketAcceptor acceptor = SocketAcceptor.builder()
-    .port(8080)
-    .channelFactory(transport -> {
-        ServerChannel<String, String> ch = ServerChannel.<String, String>builder()
-            .transport(transport)
-            .requestReader(reader)
-            .responseWriter(writer)
-            .requestHandler((req, future) -> future.complete("ok"))
-            .build();
-        return ch;
+ServerSocketTransportFactory transportFactory = ServerSocketTransportFactory.builder(8080)
+    .socketConfigurator(socket -> {
+        socket.setKeepAlive(true);
+        socket.setTcpNoDelay(true);
     })
+    .build();
+
+Acceptor acceptor = Acceptor.builder(transportFactory)
+    .channelFactory(transport -> ServerChannel.<String, String>builder()
+        .transport(transport)
+        .requestReader(reader)
+        .responseWriter(writer)
+        .requestHandler((req, future) -> future.complete("ok"))
+        .build())
     .build();
 acceptor.start();
 
-// acceptor.close() gracefully shuts down all active channels
+// acceptor.close() gracefully shuts down all active channels and the transport factory
+```
+
+### Client with transport factory
+
+Use `ClientSocketTransportFactory` for configurable client connections:
+
+```java
+ClientSocketTransportFactory factory = ClientSocketTransportFactory.builder("localhost", 8080)
+    .connectTimeoutMillis(5000)
+    .socketConfigurator(socket -> socket.setTcpNoDelay(true))
+    .build();
+
+Transport transport = factory.create();
+PipelinedChannel<String, String> client = PipelinedChannel.<String, String>builder()
+    .transport(transport)
+    .requestWriter(writer)
+    .responseReader(reader)
+    .build();
+client.start();
+```
+
+### Resilient client with auto-reconnect
+
+Wrap a transport factory with `ResilientTransport` for automatic reconnection with backoff:
+
+```java
+ClientSocketTransportFactory factory = ClientSocketTransportFactory.builder("localhost", 8080)
+    .connectTimeoutMillis(5000)
+    .build();
+
+ResilientTransport transport = ResilientTransport.builder(factory)
+    .backoffStrategy(BackoffStrategy.exponential(Duration.ofMillis(100))
+        .withMax(Duration.ofSeconds(30))
+        .withJitter(0.5))
+    .maxAttempts(10)
+    .build();
+
+PipelinedChannel<String, String> client = PipelinedChannel.<String, String>builder()
+    .transport(transport)
+    .requestWriter(writer)
+    .responseReader(reader)
+    .errorHandler((ch, ctx) -> false) // return false to tolerate errors and allow reconnect
+    .build();
+client.start();
+
+// If the connection drops, ResilientTransport transparently reconnects
+// on the next inputStream()/outputStream() call
 ```
 
 ## Channel Types
@@ -184,7 +234,7 @@ Receives requests and dispatches them to a `RequestHandler`. The handler complet
 
 - Fully concurrent: multiple requests can be in flight simultaneously
 - Tracks active requests for graceful shutdown
-- Pairs naturally with `SocketAcceptor` for TCP servers
+- Pairs naturally with `Acceptor` for TCP servers
 
 ## Architecture
 
@@ -244,6 +294,60 @@ public interface Transport extends Closeable {
 
 `SocketTransport` is the built-in TCP implementation. Custom transports (TLS, in-memory, Unix domain sockets) can be plugged in by implementing this interface.
 
+### TransportFactory
+
+`TransportFactory` is a functional interface for creating new transport instances:
+
+```java
+@FunctionalInterface
+public interface TransportFactory {
+    Transport create() throws IOException;
+}
+```
+
+Built-in implementations:
+
+| Factory | Description |
+|---|---|
+| `ClientSocketTransportFactory` | Opens a new TCP connection to a remote host/port |
+| `ServerSocketTransportFactory` | Accepts an incoming TCP connection on a bound port |
+
+Both support `SocketConfigurator` for setting socket options (keepAlive, tcpNoDelay, timeouts, buffer sizes).
+
+### ResilientTransport
+
+A `Transport` decorator that automatically reconnects using a `TransportFactory` when the underlying connection fails. Reconnection happens at message boundaries — when `inputStream()` or `outputStream()` is called after a failure.
+
+- Wrapper streams detect I/O failures and set a stale flag
+- Next stream access triggers the reconnect loop with configurable backoff
+- Thread-safe: concurrent reader/writer failures trigger only one reconnect
+- OTel counters: `transport.reconnect.total`, `.success`, `.gave_up`
+
+### BackoffStrategy
+
+Composable backoff strategies for retry delays:
+
+```java
+// Fixed 500ms delay
+BackoffStrategy.fixed(Duration.ofMillis(500))
+
+// Exponential: 100ms, 200ms, 400ms, 800ms, ...
+BackoffStrategy.exponential(Duration.ofMillis(100))
+
+// Composed: exponential capped at 30s with 50% jitter
+BackoffStrategy.exponential(Duration.ofMillis(100))
+    .withMax(Duration.ofSeconds(30))
+    .withJitter(0.5)
+```
+
+### Acceptor
+
+A transport-agnostic accept loop that calls `TransportFactory.create()` repeatedly, passing each transport to a channel factory. Tracks active channels and closes them on shutdown.
+
+- Works with any `TransportFactory` (TCP, Unix domain sockets, in-memory, etc.)
+- Closes the factory on shutdown if it implements `Closeable`
+- OTel metrics: `acceptor.connections.active`
+
 ## Observability
 
 All channels are instrumented with [OpenTelemetry](https://opentelemetry.io/) tracing and metrics out of the box.
@@ -257,7 +361,10 @@ All channels are instrumented with [OpenTelemetry](https://opentelemetry.io/) tr
 | `request.errors` | Counter | Failed requests |
 | `request.duration` | Histogram | Request latency in milliseconds |
 | `write_queue.size` | UpDownCounter | Pending outbound messages |
-| `acceptor.connections.active` | UpDownCounter | Active connections (SocketAcceptor) |
+| `acceptor.connections.active` | UpDownCounter | Active connections (Acceptor) |
+| `transport.reconnect.total` | Counter | Reconnect attempts (ResilientTransport) |
+| `transport.reconnect.success` | Counter | Successful reconnections |
+| `transport.reconnect.gave_up` | Counter | Exhausted max reconnect attempts |
 
 ### Metric Attributes
 
@@ -265,7 +372,7 @@ All metrics carry `channel_type`. Per-request metrics also include `message_type
 
 - **Symmetric**: `direction` (outbound/inbound)
 - **Client channels**: `network.peer.address`
-- **SocketAcceptor**: `server.address`, `server.port`
+- **Acceptor**: per-connection transport attributes
 - **On error**: `error_type` (exception class name)
 
 ### Traces
