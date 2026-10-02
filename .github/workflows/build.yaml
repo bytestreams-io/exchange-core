@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  merge_group:
 
 permissions:
   checks: write
@@ -68,12 +69,13 @@ jobs:
           echo "COMMIT=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
 
       - name: Set release variable (branch)
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         run: |
           echo "SOURCE=${{ github.ref_name }}" >> $GITHUB_ENV
 
       - name: Release
         id: release
+        if: github.event_name != 'merge_group'
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
@@ -113,5 +115,6 @@ jobs:
             }
 
       - name: Release summary
+        if: github.event_name != 'merge_group'
         run: |
           echo "Version \`${{ steps.release.outputs.revision }}\` is deployed!" >> $GITHUB_STEP_SUMMARY
