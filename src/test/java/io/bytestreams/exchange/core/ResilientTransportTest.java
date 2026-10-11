@@ -273,6 +273,50 @@ class ResilientTransportTest {
     }
 
     @Test
+    void end_of_stream_on_bulk_read_sets_stale_and_triggers_reconnect() throws IOException {
+      InputStream eofIn = mock(InputStream.class);
+      when(eofIn.read(any(byte[].class), anyInt(), anyInt())).thenReturn(-1);
+      Transport t1 = mockTransport(eofIn, mock(OutputStream.class));
+      Transport t2 = mockTransport();
+
+      TransportFactory factory = mock(TransportFactory.class);
+      when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+      ResilientTransport transport =
+          ResilientTransport.builder(factory)
+              .backoffStrategy(BackoffStrategy.fixed(Duration.ZERO))
+              .maxAttempts(3)
+              .build();
+
+      assertThat(transport.inputStream().read(new byte[10], 0, 10)).isEqualTo(-1);
+
+      transport.inputStream();
+      verify(factory, times(2)).create();
+    }
+
+    @Test
+    void end_of_stream_on_single_byte_read_sets_stale_and_triggers_reconnect() throws IOException {
+      InputStream eofIn = mock(InputStream.class);
+      when(eofIn.read()).thenReturn(-1);
+      Transport t1 = mockTransport(eofIn, mock(OutputStream.class));
+      Transport t2 = mockTransport();
+
+      TransportFactory factory = mock(TransportFactory.class);
+      when(factory.create()).thenReturn(t1).thenReturn(t2);
+
+      ResilientTransport transport =
+          ResilientTransport.builder(factory)
+              .backoffStrategy(BackoffStrategy.fixed(Duration.ZERO))
+              .maxAttempts(3)
+              .build();
+
+      assertThat(transport.inputStream().read()).isEqualTo(-1);
+
+      transport.inputStream();
+      verify(factory, times(2)).create();
+    }
+
+    @Test
     void write_failure_sets_stale_and_triggers_reconnect() throws IOException {
       OutputStream failingOut = mock(OutputStream.class);
       doThrow(new IOException("broken"))

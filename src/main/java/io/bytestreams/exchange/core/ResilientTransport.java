@@ -3,6 +3,7 @@ package io.bytestreams.exchange.core;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.Meter;
+import java.io.EOFException;
 import java.io.FilterInputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -231,7 +232,7 @@ public final class ResilientTransport implements Transport {
     @Override
     public int read() throws IOException {
       try {
-        return super.read();
+        return markStaleOnEof(super.read());
       } catch (IOException e) {
         markStale(e);
         throw e;
@@ -241,11 +242,21 @@ public final class ResilientTransport implements Transport {
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
       try {
-        return super.read(b, off, len);
+        return markStaleOnEof(super.read(b, off, len));
       } catch (IOException e) {
         markStale(e);
         throw e;
       }
+    }
+
+    // A peer that closes cleanly yields EOF rather than an exception. The caller's MessageReader
+    // may translate that into an exception of its own, which this wrapper never sees, so EOF must
+    // be treated as a lost connection here or the stale cached stream would be re-read forever.
+    private int markStaleOnEof(int result) {
+      if (result < 0) {
+        markStale(new EOFException("End of stream reached on transport"));
+      }
+      return result;
     }
   }
 
